@@ -28,6 +28,10 @@ Create maintainable ESP-IDF C/C++ firmware with modular, testable domain/service
 - Use existing ESP-IDF drivers (`esp_lcd`, `esp_http_server`, `esp_netif`, `esp_event`, NVS, mDNS component), Espressif LVGL port, and a ready frontend framework; avoid handwritten HTTP stacks, bespoke LVGL schedulers or reinvention of captive portal.
 - Match concurrency to actual platform: on ESP32-C3/C5/H2 one core or constrained resources may change task architecture; P4 with PSRAM can support larger GUI.
 
+## Hardware manifest and feature gating
+
+Each board-specific agent task MUST inspect and maintain the [Hardware Manifest + Capability Registry](docs/hardware-and-capabilities.md). Unknown GPIOs, Wi-Fi companion links, Flash/PSRAM, displays or encrypted NVS key protection remain `unverified`; do not mark them `ready`. Keep a consistent read-only runtime capability snapshot across WebGUI and LVGL; test derived dependencies (Wi-Fi, NVS, mDNS, display). Separate verified board facts from service readiness. The included example profile is illustrative, not a hardware fact sheet.
+
 ## Agent execution protocol
 `DISCOVER → CONTRACT → PLAN → IMPLEMENT → VERIFY → DOCUMENT → REVIEW`.
 Each agent owns agreed files; no overlapping writes. At contract stage define DTOs, namespaces, error codes, lifecycle, concurrency, resource budgets and tests. Parallelize independent tasks only after contracts stabilize. Coordinator integrates and owns the final build. Follow [Agent workflow](docs/agent-swarm.md).

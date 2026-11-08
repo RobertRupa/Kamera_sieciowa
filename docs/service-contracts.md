@@ -75,7 +75,8 @@ These are interface examples, not drop-in firmware: a real implementation must a
 | Method/path | Auth | Purpose | Expected result |
 | --- | --- | --- | --- |
 | `GET /api/v1/health` | optional, minimal | liveness/version | 200 + health JSON |
-| `GET /api/v1/device` | session | capabilities, firmware, uptime, target | 200 |
+| `GET /api/v1/device` | session | firmware, uptime, target; no secrets | 200 |
+| `GET /api/v1/device/capabilities` | session | read-only hardware/compile/runtime capability states | 200 |
 | `GET /api/v1/network` | session | STA/AP/IP/mDNS status, **no passwords** | 200 |
 | `POST /api/v1/network/scan` | session or limited provisioning context | enqueue scan | 202 + operation ID |
 | `GET /api/v1/network/scan/{id}` | matching session | scan result/status | 200 / 404 |

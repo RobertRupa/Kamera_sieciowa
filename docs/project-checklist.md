@@ -4,6 +4,8 @@ Check items with evidence; note N/A explicitly for unsupported hardware.
 
 ## Hardware / architecture
 - [ ] Exact board revision, MCU, Flash/PSRAM, schematics and GPIO/bus pin matrix documented.
+- [ ] Machine-readable Hardware Manifest verified, including explicit unknowns and evidence for assigned GPIOs.
+- [ ] Capability Registry evaluates verified hardware, compile-time modules and runtime readiness; WebGUI/LVGL use the same snapshot.
 - [ ] Native ESP-IDF + CMake, official components where possible, `idf_component.yml` + resolved `dependencies.lock`.
 - [ ] Domain/Application/Ports/Adapters + UI MVC split; small classes in matching .hpp/.cpp under appropriate components.
 - [ ] Constructor DI, typed result/errors, state machine, event ownership and concurrency contract.

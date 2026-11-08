@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "kind": "esp-idf-hardware-manifest",
+  "example_only": true,
+  "board": {
+    "id": "example-esp32p4-c6-display",
+    "vendor": null,
+    "model": null,
+    "pcb_revision": null,
+    "schematic_url": null,
+    "notes": "ILLUSTRATIVE integration profile, not the verified pinout of any commercial PCB."
+  },
+  "primary_mcu": {
+    "idf_target": "esp32p4",
+    "soc": "ESP32-P4",
+    "has_native_wifi": false,
+    "flash_bytes": null,
+    "psram_bytes": null,
+    "boot_console": null
+  },
+  "radios": {
+    "wifi": {
+      "topology": "companion",
+      "verification": "unverified",
+      "companion_soc": "ESP32-C6",
+      "companion_firmware": null,
+      "transport": null,
+      "supported_driver_options": ["esp_wifi_remote", "esp_extconn"],
+      "notes": "Choose supported transport after checking actual PCB wiring, companion firmware and SDK."
+    }
+  },
+  "display": {
+    "verification": "unverified",
+    "interface": null,
+    "controller": null,
+    "width_px": null,
+    "height_px": null,
+    "rotation_deg": null,
+    "backlight_gpio": null,
+    "source": null
+  },
+  "touch": {
+    "verification": "unverified",
+    "controller": null,
+    "interface": null,
+    "i2c_address": null,
+    "source": null
+  },
+  "security": {
+    "nvs_encryption": {
+      "key_protection_verification": "unverified",
+      "key_provider": null,
+      "nvs_partition": null,
+      "key_partition": null,
+      "wifi_storage": null,
+      "notes": "An encrypted partition entry or encrypted copy does not prove protected Wi-Fi credentials."
+    }
+  },
+  "pins": [
+    {"signal": "WIFI_COMPANION_TX", "gpio": null, "direction": "output", "source": null},
+    {"signal": "WIFI_COMPANION_RX", "gpio": null, "direction": "input", "source": null},
+    {"signal": "LCD_RESET", "gpio": null, "direction": "output", "source": null},
+    {"signal": "LCD_BACKLIGHT", "gpio": null, "direction": "output", "source": null},
+    {"signal": "TOUCH_SDA", "gpio": null, "direction": "bidir", "source": null},
+    {"signal": "TOUCH_SCL", "gpio": null, "direction": "output", "source": null}
+  ],
+  "firmware_policy": {
+    "wifi_wizard": "required_if_wifi_verified",
+    "captive_portal": "required_if_wifi_verified",
+    "mdns": "required_if_ip_available",
+    "webgui": "required_if_ip_available",
+    "lvgl": "required_if_display_verified",
+    "nvs_encryption": "required_before_wifi_credential_persistence",
+    "local_dev_login": "admin/admin in explicitly flagged dev builds only"
+  },
+  "evidence": [
+    {
+      "claim": "ESP32-P4 does not include native Wi-Fi",
+      "source": "https://docs.espressif.com/projects/esp-idf/en/stable/esp32p4/get-started/index.html"
+    },
+    {
+      "claim": "ESP32-P4 Wi-Fi expansion supports esp_wifi_remote / esp-extconn",
+      "source": "https://docs.espressif.com/projects/esp-idf/en/stable/esp32p4/api-guides/wifi-expansion.html"
+    }
+  ],
+  "needs_verification": [
+    "Actual board ID and PCB revision",
+    "Actual companion transport, C6 firmware and bus pins",
+    "Actual Flash/PSRAM from schematic and probe",
+    "LCD and touch hardware, resolution, GPIOs and power sequencing",
+    "NVS key-protection scheme, partitions and Wi-Fi driver storage mode"
+  ]
+}

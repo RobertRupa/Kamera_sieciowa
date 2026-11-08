@@ -1,7 +1,7 @@
 # Coding agents and swarm execution protocol
 
 ## Canonical sequence
-1. **DISCOVER**: read repo instructions, Kconfig/CMake/dependencies/board pinout and current behavior. Output a concise capability matrix: ESP-IDF version, target, Flash/PSRAM, radio, LCD/touch, security policy.
+1. **DISCOVER**: read repo instructions, [Hardware Manifest and Capability Registry](hardware-and-capabilities.md), Kconfig/CMake/dependencies/board pinout and current behavior. Output a concise capability matrix: ESP-IDF version, target, Flash/PSRAM, radio, LCD/touch, security policy.
 2. **CONTRACT**: coordinator publishes interface signatures, DTOs, REST endpoints, state transitions, event schema, partition plan and owner of each directory. Resolve hard dependencies *before* parallel code.
 3. **PLAN**: split into independent slices with explicit owner, deliverable, acceptance criteria and integration point.
 4. **IMPLEMENT**: agents commit small changes to agreed paths, never rewrite another agent's files; stay within approved dependency and security policy.
