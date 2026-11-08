@@ -116,6 +116,10 @@ firmware/
 
 The tree is a **template**, not a mandate to create empty folders or one-file wrapper classes. For a tiny project merge cohesive adjacent components; keep dependency boundaries. Each nontrivial class uses e.g. `Thing.hpp` + `Thing.cpp` in matching include/src component, not one monolithic `main.cpp`. Pure DTOs, enums, traits and small templates may be header-only.
 
+## Hardware truth and runtime capabilities
+
+Keep a versioned, verified board manifest in `docs/hardware/board.json`. Convert it into a compiled `BoardProfile` at the BSP boundary. Use an injected, read-only `CapabilityRegistry` to combine verified hardware, selected components and runtime service status; controllers (REST/LVGL) consume the same capability snapshot rather than probing pins or copying compile flags. Example and host-testable C++17 component: [Hardware and Capability Registry](hardware-and-capabilities.md).
+
 ## Boot lifecycle
 1. `app_main` initializes logging, NVS key/security scheme, event loop, network interfaces, and resources.
 2. Instantiate concrete adapters, validate partition/config schema, then inject them into application services.

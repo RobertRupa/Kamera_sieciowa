@@ -16,6 +16,7 @@
 | --- | --- |
 | Agent instructions / precedence | [AGENTS.md](AGENTS.md) |
 | MVC, modules, dependency direction, project tree | [Architecture](docs/architecture.md) |
+| Hardware Manifest + tested Capability Registry reference | [Hardware and capabilities](docs/hardware-and-capabilities.md) |
 | SOLID, DRY, KISS, DI, RAII, concurrency | [Engineering principles](docs/engineering-principles.md) |
 | Interfaces and HTTP/event contracts | [Service contracts](docs/service-contracts.md) |
 | Stack, compatibility and version policy | [Dependencies and targets](docs/dependencies-and-targets.md) |
