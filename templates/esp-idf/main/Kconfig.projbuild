@@ -1,0 +1,17 @@
+menu "Application profile"
+
+config APP_DEV_MODE
+    bool "Development / local laboratory firmware"
+    default y
+    help
+        Development diagnostics are permitted. Disable in release.
+
+config APP_DEV_DEFAULT_CREDENTIALS
+    bool "Allow admin/admin default WebGUI login (INSECURE)"
+    depends on APP_DEV_MODE
+    default y
+    help
+        For explicitly local test firmware only. Authentication module must
+        reject default credentials when APP_DEV_MODE is disabled.
+
+endmenu
