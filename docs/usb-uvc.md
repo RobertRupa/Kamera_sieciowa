@@ -11,10 +11,73 @@ This is a native UVC USB device; host systems use their standard webcam
 drivers, without OBS virtual camera software.
 
 **Physical warning:** the board has a Type-A OTG socket and a role jumper.
-Confirm the exact PCB revision/schematic, device jumper, USB wiring and VBUS
-before making a host-to-device connection. Never join two host Type-A ports
-using a standard A-to-A cable. The programming/debug USB port is not the
-UVC data port. Device routing has not yet been verified on this PCB.
+Confirm the exact PCB revision/schematic, device-role jumper, USB wiring and
+VBUS before making a host-to-device connection. On the common base board there
+are two Type-C connectors labelled **USB TO UART** (programming/debug) and
+**USB**; the latter is the first candidate for a direct P4 USB connection.
+Test only a connector whose schematic confirms it is routed to the P4 **HS
+OTG** peripheral. The Type-A sockets are associated with the HOST/DEVICE
+jumper and a CH334 hub; the manufacturer FAQ describes the USB port selection.
+A data-capable USB-C cable is preferable when the board routes HS OTG to a
+Type-C device connector. Never join two host Type-A ports with a standard
+A-to-A cable or drive VBUS from two sources. Device routing remains unverified
+on this particular PCB.
+
+## First bring-up: Linux host cannot detect a webcam
+
+1. Confirm camera-side serial log includes
+   `USB HS UVC MJPEG stack started`. This proves only that TinyUSB started,
+   **not** that the host enumerated the device.
+2. Check the physical USB route (device-role jumper, correct direct OTG data
+   connector, good USB 2.0 high-speed data cable, host-side VBUS sensing).
+   A Type-C-to-USB-UART programming cable is not a UVC data connection.
+   Waveshare's FAQ notes that the Type-A ports are switched between direct
+   connection and the CH334 hub; do not treat any Type-A port as a safe
+   standard host-to-host cable attachment.
+3. On the **Ubuntu host**, monitor connection attempts while reconnecting the
+   verified data connector:
+
+   ```bash
+   sudo dmesg -w
+   # In another terminal:
+   lsusb
+   sudo apt-get install -y v4l-utils
+   v4l2-ctl --list-devices
+   ```
+
+   If `dmesg` shows **no new USB device at all**, investigate cable,
+   connector, jumper, power and VBUS first. If `lsusb` shows a device but
+   `/dev/video*` is missing, inspect its USB descriptors and `uvcvideo`
+   binding: `lsusb -v -d VID:PID`, `lsmod | grep uvcvideo`,
+   `sudo modprobe uvcvideo`. Do not guess a VID/PID; read it from `lsusb`.
+4. When the host starts the UVC stream, the serial console should print
+   `USB host requested UVC ...` and `UVC COMMIT ...`. No such log means
+   the video application has not initiated a stream (even if descriptors
+   were enumerated).
+5. Confirm the earlier serial log also contains a successful
+   `camera probe=...` and that persistent capture is running. UVC
+   initializes only when camera capture has started.
+
+USB device enumeration and Wi-Fi association are independent. The first
+cannot be repaired solely by changing AP/STA configuration.
+
+## Development Wi-Fi recovery
+
+The checked-in `sdkconfig.defaults` authorizes the **already tested**
+ESP32-P4 ↔ ESP32-C6 SDIO wiring and an **open development setup AP**.
+This is intentionally insecure and suitable **only** for an isolated
+development environment. The AP SSID is `CAMERA-HUB-SETUP`; once started,
+it is expected at `192.168.4.1`. Configure a station's SSID/password
+through the setup WebGUI or use previously saved credentials.
+
+Because an existing `build/default/sdkconfig` survives Git pulls, it
+may still contain `# CONFIG_APP_WIFI_WIRING_VERIFIED is not set` and/or
+`# CONFIG_APP_DEV_OPEN_SETUP_AP is not set`. Use
+`idf.py --preset default menuconfig` → **Camera Hub** to enable both,
+then `idf.py --preset default build flash monitor`. On boot check
+`Wi-Fi gates: wiring_verified=1 open_ap_authorized=1 ...`. If
+initialization then fails in ESP-Hosted/SDIO, inspect the **first**
+`wifi_service` or `esp_hosted` error; it is a separate issue.
 
 ## Sensor mode vs actual delivered FPS
 
@@ -48,8 +111,8 @@ While no USB host is streaming, USB has no enabled frame queue.
 ## Build / flash in VS Code sidebar
 
 Open `Kamera_sieciowa.code-workspace`, install the recommended
-`espressif.esp-idf-extension`, select the **ESP32-P4 Firmware (ESP-IDF)**
-workspace folder, ESP-IDF 6.1, target `esp32p4` and the programming port.
+`espressif.esp-idf-extension`, select the **Kamera_sieciowa (ESP32-P4)** root workspace folder, ESP-IDF 6.1,
+the `default` CMake preset (target `esp32p4`) and the programming port.
 Use the **Espressif** icon at left and click **Build Your Project**,
 **Flash Your Project**, or **Build, Flash and Start a Monitor**.
 
@@ -58,7 +121,6 @@ dependencies when missing and rebuilds the embedded Vue WebGUI only if
 sources changed. To build manually from a configured ESP-IDF environment:
 
 ```bash
-python scripts/prepare_web_assets.py
 # Run from the repository root (Kamera_sieciowa/).
 python3 scripts/prepare_web_assets.py
 idf.py --preset default build
@@ -69,7 +131,7 @@ In Windows use your selected `COMx` port in place of `/dev/ttyACM0`.
 Do not erase flash/eFuses or write backup images as part of normal flashing.
 
 The new UVC component changes the dependency graph. Regenerate and inspect
-`firmware/dependencies.lock` by running IDF Component Manager on a machine
+`dependencies.lock` at the repository root by running IDF Component Manager on a machine
 with network access and ESP-IDF 6.1; this step remains pending here.
 
 ## Host verification checklist (not yet executed)

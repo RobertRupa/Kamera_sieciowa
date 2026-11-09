@@ -81,8 +81,14 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
 - **Hardware warning:** verify the actual Waveshare USB OTG connector role jumper,
   D+/D− wiring, and VBUS before connecting a computer. Use a suitable device-mode
   connection, never an ordinary host-to-host USB-A cable.
-- New USB functionality and higher-than-20-FPS streaming are **not yet build- or
-  hardware-verified**. The observed baseline remains the earlier 20 FPS tests.
+- The ESP-IDF 6.1 build and UVC service initialization have now been observed
+  on hardware; **USB host enumeration and higher-than-20-FPS streaming remain
+  unverified**. The earlier 20 FPS baseline remains the last measured stream.
+- Development Wi-Fi setup requires the P4/C6 transport-wiring and open-AP
+  gates. The dev defaults now enable them for the previously tested SDIO
+  wiring, but any existing generated `build/default/sdkconfig` may retain
+  older disabled values. The setup AP is **open and unauthenticated**; never
+  use that development profile on an untrusted network.
   See [USB webcam bring-up](docs/usb-uvc.md) and
   [VS Code build/flash](docs/build-flash-vscode.md).
 

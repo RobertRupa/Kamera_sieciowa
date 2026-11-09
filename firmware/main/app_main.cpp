@@ -87,7 +87,8 @@ extern "C" void app_main() {
         ESP_LOGI("camera_hub", "%s=%s", capabilities.featureKey(feature),
                  capabilities.stateKey(capabilities.get(feature, runtime)));
     }
-    ESP_LOGW("camera_hub", "Wi-Fi credential provisioning requires verified board and companion storage configuration");
+    // The default dev profile authorizes the known P4<->C6 SDIO wiring and an
+    // OPEN setup AP. The actual active sdkconfig may retain older "n" values.
     connectivity::WifiService wifi;
     app_services::NetworkProvisioner provisioner(credentialStore, wifi);
     app_services::NetworkScanService scanService(wifi);
@@ -106,6 +107,20 @@ extern "C" void app_main() {
 #if CONFIG_APP_DEV_OPEN_SETUP_AP
     prerequisites.localOpenApAuthorized = true;
 #endif
+    ESP_LOGI("camera_hub",
+             "Wi-Fi gates: wiring_verified=%d open_ap_authorized=%d store_ready=%d companion_storage_audited=%d",
+             static_cast<int>(prerequisites.boardWiringVerified),
+             static_cast<int>(prerequisites.localOpenApAuthorized),
+             static_cast<int>(prerequisites.credentialStoreReady),
+             static_cast<int>(prerequisites.companionStorageAudited));
+    if (!prerequisites.boardWiringVerified || !prerequisites.localOpenApAuthorized) {
+        ESP_LOGE("camera_hub",
+                 "Wi-Fi blocked by firmware configuration: enable APP_WIFI_WIRING_VERIFIED "
+                 "and APP_DEV_OPEN_SETUP_AP in the active dev sdkconfig; no C6 handshake attempted");
+    } else {
+        ESP_LOGW("camera_hub",
+                 "Development setup AP is OPEN; use only in a controlled lab, not production");
+    }
     const auto wifiResult = wifi.startProvisioning(prerequisites, "CAMERA-HUB-SETUP");
     if (wifiResult != ESP_OK) {
         ESP_LOGW("camera_hub", "Provisioning start refused: %s", esp_err_to_name(wifiResult));

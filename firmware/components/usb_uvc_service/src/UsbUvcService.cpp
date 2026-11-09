@@ -55,7 +55,10 @@ esp_err_t UsbUvcService::start() noexcept {
         return result;
     }
     initialized_ = true;
-    ESP_LOGI(kTag, "USB HS UVC MJPEG initialized; awaiting host COMMIT");
+    ESP_LOGI(kTag,
+             "USB HS UVC MJPEG stack started (no host enumeration confirmed); awaiting UVC host COMMIT");
+    ESP_LOGI(kTag,
+             "If PC cannot detect camera: verify board USB OTG device role, direct data port and VBUS");
     return ESP_OK;
 #endif
 }
@@ -63,9 +66,16 @@ esp_err_t UsbUvcService::start() noexcept {
 esp_err_t UsbUvcService::onStart(uvc_format_t format, int width, int height,
                                 int rate, void* context) {
     auto& service = *static_cast<UsbUvcService*>(context);
-    if (format != UVC_FORMAT_JPEG || width <= 0 || height <= 0 || rate <= 0)
+    ESP_LOGI(kTag, "USB host requested UVC format=%d, size=%dx%d, fps=%d",
+             static_cast<int>(format), width, height, rate);
+    if (format != UVC_FORMAT_JPEG || width <= 0 || height <= 0 || rate <= 0) {
+        ESP_LOGW(kTag, "Unsupported UVC request; MJPEG modes only");
         return ESP_ERR_NOT_SUPPORTED;
+    }
     const auto result = service.camera_.startUsbStream(width, height, rate);
+    if (result != ESP_OK)
+        ESP_LOGE(kTag, "UVC host stream negotiation failed for %dx%d@%d: %s",
+                 width, height, rate, esp_err_to_name(result));
     if (result == ESP_OK) {
         service.requestedWidth_ = width;
         service.requestedHeight_ = height;
