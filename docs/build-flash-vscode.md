@@ -28,6 +28,35 @@ continues to enable it and uses `firmware/build`. ESP-IDF `set-target`
 normally performs a full clean of the selected firmware build directory, so
 avoid re-running it on every build.
 
+### ESP-IDF 6.1: missing `esp_h264` during `set-target`
+
+If CMake reports `Failed to resolve component 'esp_h264' required by component
+'camera_stream'` and the component manager prints `Deleting 1 unused
+components: espressif__esp_h264`, update this branch first. The
+`camera_stream/idf_component.yml` manifest now declares
+`espressif/esp_h264: 1.4.*` explicitly, and CMake depends on the
+registry component name `espressif__esp_h264`. The dependency is required
+because `CameraHardwareProbe.cpp` directly includes
+`esp_h264_enc_single_hw.h`. This prevents the component manager from
+pruning the library when `esp_video` treats H.264 as a conditional
+dependency.
+
+From an ESP-IDF 6.1 terminal in the project directory, run:
+
+```bash
+idf.py reconfigure
+idf.py build
+```
+
+If the current `set-target` action previously failed, run
+**ESP-IDF: Set Espressif Device Target → esp32p4** once, then Build.
+The component manager re-resolves `firmware/dependencies.lock` and
+populates `firmware/managed_components/` automatically; do not manually
+copy files into that directory or remove unrelated build folders.
+If a CMake preset is active, the extension may use
+`firmware/build/default` and a preset-specific `sdkconfig` instead of
+`firmware/build` directly.
+
 ## Camera_sieciowa: build and flash from the sidebar
 
 1. In VS Code select **File → Open Workspace from File** and open
