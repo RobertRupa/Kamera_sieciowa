@@ -4,6 +4,8 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 namespace usb_uvc_service {
 namespace {
@@ -83,12 +85,16 @@ uvc_fb_t* UsbUvcService::onGetFrame(void* context) {
         status.width != service.requestedWidth_ || status.height != service.requestedHeight_ ||
         status.fps != service.requestedFps_ ||
         configuration.state == camera_hub::ConfigurationState::Queued ||
-        configuration.state == camera_hub::ConfigurationState::Applying)
+        configuration.state == camera_hub::ConfigurationState::Applying) {
+        vTaskDelay(pdMS_TO_TICKS(5));
         return nullptr;
+    }
     service.inFlight_.reset();
     service.inFlight_ = service.camera_.tryTakeUsbFrame();
-    if (!service.inFlight_ || service.inFlight_.codec() != camera_hub::VideoCodec::Jpeg)
+    if (!service.inFlight_ || service.inFlight_.codec() != camera_hub::VideoCodec::Jpeg) {
+        vTaskDelay(pdMS_TO_TICKS(2));
         return nullptr;
+    }
     const auto us = service.inFlight_.timestampUs();
     service.frame_.buf = const_cast<std::uint8_t*>(service.inFlight_.data());
     service.frame_.len = service.inFlight_.size();

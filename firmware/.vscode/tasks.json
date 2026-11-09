@@ -2,6 +2,19 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "ESP32-P4: Prepare WebGUI",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "../scripts/prepare_web_assets.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "detail": "Install frontend dependencies if missing; rebuild only when source assets change"
+    },
+    {
       "label": "ESP32-P4: Build firmware",
       "type": "shell",
       "command": "idf.py",
@@ -16,7 +29,8 @@
         "isDefault": true
       },
       "problemMatcher": [],
-      "detail": "ESP-IDF 6.1 / ESP32-P4 incremental build; requires an exported ESP-IDF environment"
+      "detail": "ESP-IDF 6.1 / ESP32-P4 incremental build; requires an exported ESP-IDF environment",
+      "dependsOn": "ESP32-P4: Prepare WebGUI"
     },
     {
       "label": "ESP32-P4: Flash firmware",
@@ -29,7 +43,8 @@
         "cwd": "${workspaceFolder}"
       },
       "problemMatcher": [],
-      "detail": "Build if needed, auto-detect connected ESP32-P4 serial port; requires IDF environment"
+      "detail": "Build if needed, auto-detect connected ESP32-P4 serial port; requires IDF environment",
+      "dependsOn": "ESP32-P4: Prepare WebGUI"
     },
     {
       "label": "ESP32-P4: Build + Flash + Monitor",
@@ -48,7 +63,8 @@
         "reveal": "always",
         "panel": "dedicated"
       },
-      "detail": "USB-UART programming/debug serial port (not USB OTG UVC port)"
+      "detail": "USB-UART programming/debug serial port (not USB OTG UVC port)",
+      "dependsOn": "ESP32-P4: Prepare WebGUI"
     },
     {
       "label": "ESP32-P4: Monitor",

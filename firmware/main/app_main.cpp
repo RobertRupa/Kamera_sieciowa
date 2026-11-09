@@ -21,6 +21,13 @@
 #error "ESP-Hosted auto-init must remain disabled until verified application startup."
 #endif
 
+namespace {
+[[noreturn]] void keepUsbAliveWithoutNetwork() noexcept {
+    ESP_LOGW("camera_hub", "Network unavailable; maintaining camera and USB UVC service");
+    for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
+}
+} // namespace
+
 extern "C" void app_main() {
 #if CONFIG_APP_C6_TRANSPORT_PROBE
     ESP_LOGI("camera_hub", "C6_PROBE begin; no credentials or AP/STA configured");
@@ -102,15 +109,15 @@ extern "C" void app_main() {
     const auto wifiResult = wifi.startProvisioning(prerequisites, "CAMERA-HUB-SETUP");
     if (wifiResult != ESP_OK) {
         ESP_LOGW("camera_hub", "Provisioning start refused: %s", esp_err_to_name(wifiResult));
-        return;
+        keepUsbAliveWithoutNetwork();
     }
     if (!wifi.waitForAp(pdMS_TO_TICKS(5000)) || wifi.apAddress() == 0) {
         ESP_LOGW("camera_hub", "Provisioning AP did not become ready");
-        return;
+        keepUsbAliveWithoutNetwork();
     }
     if (api.start(prerequisites, wifi.apAddress()) != ESP_OK) {
         ESP_LOGW("camera_hub", "Provisioning AP or HTTP start failed");
-        return;
+        keepUsbAliveWithoutNetwork();
     }
     std::int64_t deadline = 0;
     std::int64_t scanDeadline = 0;

@@ -6,5 +6,6 @@
   "idf.sdkconfigDefaults": [
     "${workspaceFolder}/sdkconfig.defaults"
   ],
-  "idf.saveBeforeBuild": true
+  "idf.saveBeforeBuild": true,
+  "idf.preBuildTask": "python ../scripts/prepare_web_assets.py"
 }
