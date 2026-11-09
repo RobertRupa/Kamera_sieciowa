@@ -18,11 +18,8 @@ CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y
 CONFIG_APP_DEV_MODE=y
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
 CONFIG_APP_DEV_DEFAULT_CREDENTIALS=n
-# Development board 30560: P4<->C6 SDIO pinout and RPC v2 were previously verified.
-# These two opt-ins are DEVELOPMENT ONLY. Setup AP is open and unauthenticated.
-# Do not use this configuration for deployment on an untrusted network.
-CONFIG_APP_WIFI_WIRING_VERIFIED=y
-CONFIG_APP_DEV_OPEN_SETUP_AP=y
+# Development AP is only authorized through the default CMake preset:
+# sdkconfig.dev.defaults. The production preset does not enable it.
 CONFIG_APP_C6_STORAGE_AUDITED=y
 CONFIG_ESP_HOSTED_AUTO_CALL_INIT_BEFORE_APP_MAIN=n
 CONFIG_CJSON_NESTING_LIMIT=4

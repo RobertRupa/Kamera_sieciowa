@@ -15,7 +15,7 @@
       "cacheVariables": {
         "IDF_TARGET": "esp32p4",
         "SDKCONFIG": "${sourceDir}/build/default/sdkconfig",
-        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.defaults"
+        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.defaults;${sourceDir}/sdkconfig.dev.defaults"
       },
       "vendor": {
         "espressif/vscode-esp-idf": {

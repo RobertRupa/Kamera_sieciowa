@@ -85,7 +85,7 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
   on hardware; **USB host enumeration and higher-than-20-FPS streaming remain
   unverified**. The earlier 20 FPS baseline remains the last measured stream.
 - Development Wi-Fi setup requires the P4/C6 transport-wiring and open-AP
-  gates. The dev defaults now enable them for the previously tested SDIO
+  gates. `sdkconfig.dev.defaults` enables them for the previously tested SDIO
   wiring, but any existing generated `build/default/sdkconfig` may retain
   older disabled values. The setup AP is **open and unauthenticated**; never
   use that development profile on an untrusted network.

@@ -63,7 +63,8 @@ cannot be repaired solely by changing AP/STA configuration.
 
 ## Development Wi-Fi recovery
 
-The checked-in `sdkconfig.defaults` authorizes the **already tested**
+The checked-in `sdkconfig.dev.defaults` (included only by the **default**
+CMake preset) authorizes the **already tested**
 ESP32-P4 ↔ ESP32-C6 SDIO wiring and an **open development setup AP**.
 This is intentionally insecure and suitable **only** for an isolated
 development environment. The AP SSID is `CAMERA-HUB-SETUP`; once started,
