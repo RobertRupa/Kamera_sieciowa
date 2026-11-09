@@ -1,3 +1,6 @@
 {
-    "cmake.sourceDirectory": "C:/Kamera_sieciowa/firmware"
+  "cmake.sourceDirectory": "${workspaceFolder}/firmware",
+  "files.associations": {
+    "*.hpp": "cpp"
+  }
 }

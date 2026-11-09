@@ -1,0 +1,71 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ESP32-P4: Build firmware",
+      "type": "shell",
+      "command": "idf.py",
+      "args": [
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "detail": "ESP-IDF 6.1 / ESP32-P4 incremental build; requires an exported ESP-IDF environment"
+    },
+    {
+      "label": "ESP32-P4: Flash firmware",
+      "type": "shell",
+      "command": "idf.py",
+      "args": [
+        "flash"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "detail": "Build if needed, auto-detect connected ESP32-P4 serial port; requires IDF environment"
+    },
+    {
+      "label": "ESP32-P4: Build + Flash + Monitor",
+      "type": "shell",
+      "command": "idf.py",
+      "args": [
+        "build",
+        "flash",
+        "monitor"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "detail": "USB-UART programming/debug serial port (not USB OTG UVC port)"
+    },
+    {
+      "label": "ESP32-P4: Monitor",
+      "type": "shell",
+      "command": "idf.py",
+      "args": [
+        "monitor"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "detail": "Read logs from connected programming USB-UART port"
+    }
+  ]
+}

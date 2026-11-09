@@ -1,0 +1,10 @@
+{
+  "idf.extensionActivationMode": "always",
+  "idf.flashType": "UART",
+  "idf.port": "detect",
+  "idf.buildPath": "${workspaceFolder}/build",
+  "idf.sdkconfigDefaults": [
+    "${workspaceFolder}/sdkconfig.defaults"
+  ],
+  "idf.saveBeforeBuild": true
+}

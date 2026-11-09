@@ -19,7 +19,6 @@ const configuration = ref<CameraConfiguration | null>(null)
 const udp = ref<CameraUdp | null>(null)
 const selected = ref('')
 const modeId = ref(0)
-const fps = ref(20)
 const quality = ref(80)
 const codec = ref<'jpeg' | 'h264'>('jpeg')
 const bitrate = ref(2000000)
@@ -36,7 +35,6 @@ const cameras = computed(() => inventory.value?.cameras.map(camera => ({ ...came
   label: `${camera.id} · ${camera.sensor} · ${camera.interface}` })) ?? [])
 const modes = computed(() => configuration.value?.modes.map(mode => ({ ...mode,
   label: `${mode.width} × ${mode.height} · ${mode.sensor_fps} FPS`, disabled: !mode.available })) ?? [])
-const maxFps = computed(() => Math.min(20, modes.value.find(mode => mode.id === modeId.value)?.sensor_fps ?? 20))
 const codecOptions = computed(() => (configuration.value?.hardware_codecs ?? ['jpeg']).map(value => ({
   value, label: t(value === 'h264' ? 'hardware_h264' : 'hardware_jpeg'),
   disabled: value === 'h264' && !modes.value.find(mode => mode.id === modeId.value)?.h264_available,
@@ -47,7 +45,6 @@ const sdpLink = computed(() => `${device.base}/api/v1/cameras/${selected.value}/
 function acceptConfiguration(value: CameraConfiguration) {
   configuration.value = value
   modeId.value = value.settings.mode_id
-  fps.value = value.settings.preview_fps
   quality.value = value.settings.jpeg_quality
   codec.value = value.settings.codec
   bitrate.value = value.settings.h264_bitrate
@@ -136,7 +133,7 @@ function apply() {
   return action(async () => {
     const current = generation
     await saveCameraConfiguration(device.base, selected.value,
-      { mode_id: modeId.value, preview_fps: fps.value, jpeg_quality: quality.value,
+      { mode_id: modeId.value, jpeg_quality: quality.value,
         codec: codec.value, h264_bitrate: bitrate.value }, requireToken())
     for (let attempt = 0; attempt < 40 && current === generation; ++attempt) {
       await new Promise(resolve => setTimeout(resolve, 500))
@@ -198,8 +195,6 @@ function applyUdp() {
         <Select id="camera-mode" v-model="modeId" :aria-label="t('sensor_mode')" :options="modes" option-label="label" option-value="id" option-disabled="disabled" :disabled="pending || !token" />
         <label for="camera-codec">{{ t('hardware_codec') }}</label>
         <Select id="camera-codec" v-model="codec" :aria-label="t('hardware_codec')" :options="codecOptions" option-label="label" option-value="value" option-disabled="disabled" :disabled="pending || !token" />
-        <label for="camera-fps">{{ t('preview_fps') }}</label>
-        <InputNumber input-id="camera-fps" v-model="fps" :min="1" :max="maxFps" show-buttons :disabled="pending || !token" />
         <template v-if="codec === 'jpeg'">
           <label for="camera-quality">{{ t('jpeg_quality') }}</label>
           <InputNumber input-id="camera-quality" v-model="quality" :min="1" :max="100" show-buttons :disabled="pending || !token" />

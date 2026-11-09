@@ -19,11 +19,13 @@ export const cameraInventorySchema = z.object({ data: z.object({
 
 export const cameraSettingsSchema = z.object({
   mode_id: z.number().int().min(0).max(31),
-  preview_fps: z.number().int().min(1).max(20),
+  // Read-only: the selected sensor mode determines nominal capture FPS.
+  preview_fps: z.number().int().min(1).max(255),
   jpeg_quality: z.number().int().min(1).max(100),
   codec: z.enum(['jpeg', 'h264']).default('jpeg'),
   h264_bitrate: z.number().int().min(64000).max(10000000).default(2000000),
 })
+export const cameraSettingsUpdateSchema = cameraSettingsSchema.omit({ preview_fps: true })
 export const cameraConfigurationSchema = z.object({ data: z.object({
   persistent: z.boolean(),
   hardware_codecs: z.array(z.enum(['jpeg', 'h264'])).max(2).default(['jpeg']),
@@ -60,7 +62,7 @@ const sessionSchema = z.object({ data: z.object({
 
 export type CameraInventory = z.infer<typeof cameraInventorySchema>['data']
 export type CameraConfiguration = z.infer<typeof cameraConfigurationSchema>['data']
-export type CameraSettings = z.infer<typeof cameraSettingsSchema>
+export type CameraSettings = z.infer<typeof cameraSettingsUpdateSchema>
 export type CameraUdp = z.infer<typeof udpSchema>['data']
 
 async function request(base: string, path: string, method = 'GET', body?: unknown, token?: string) {
@@ -83,7 +85,7 @@ export async function getCameraConfiguration(base: string, id: string) {
 }
 export async function saveCameraConfiguration(base: string, id: string, settings: CameraSettings, token: string) {
   return cameraConfigurationSchema.parse(await request(base, `${path(id)}/config`, 'PATCH',
-    cameraSettingsSchema.parse(settings), token)).data
+    cameraSettingsUpdateSchema.parse(settings), token)).data
 }
 export async function cameraLogin(base: string, username: string, password: string) {
   return sessionSchema.parse(await request(base, '/api/v1/camera/session', 'POST', { username, password })).data
