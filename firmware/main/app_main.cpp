@@ -1,6 +1,7 @@
 #include "board_support/BoardConfig.hpp"
 #include "board_capabilities/CapabilityRegistry.hpp"
 #include "camera_stream/CameraHardwareProbe.hpp"
+#include "usb_uvc_service/UsbUvcService.hpp"
 #include "persistence/NvsCredentialStore.hpp"
 #include "connectivity/WifiService.hpp"
 #include "connectivity/HostedProbe.hpp"
@@ -56,9 +57,24 @@ extern "C" void app_main() {
 #if CONFIG_APP_CAMERA_OV5647_DRIVER
     built.cameraCapture = true;
 #endif
+    // Start camera and USB before ESP-Hosted / AP / STA, so UVC works offline.
+    if (cameraProbeResult.state == camera_hub::CameraProbeState::FrameCaptured) {
+        const auto cameraResult = cameraProbe.startPreview(cameraProbeResult);
+        if (cameraResult != ESP_OK)
+            ESP_LOGW("camera_hub", "Persistent camera preview failed: %s",
+                     esp_err_to_name(cameraResult));
+    }
+    usb_uvc_service::UsbUvcService usbUvc(cameraProbe);
+#if CONFIG_APP_USB_UVC_ENABLE
+    if (cameraProbe.captureStatus().running) {
+        const auto usbResult = usbUvc.start();
+        if (usbResult != ESP_OK)
+            ESP_LOGW("camera_hub", "USB UVC init failed: %s", esp_err_to_name(usbResult));
+    }
+#endif
     const board_capabilities::CapabilityRegistry capabilities(board.profile(), built);
     const board_capabilities::RuntimeState runtime{};
-    ESP_LOGI("camera_hub", "Camera probe complete; persistent preview starts after the setup AP is ready");
+    ESP_LOGI("camera_hub", "Camera capture and USB start independently of setup AP");
     for (std::size_t index = 0; index < board_capabilities::kFeatureCount; ++index) {
         const auto feature = static_cast<board_capabilities::Feature>(index);
         ESP_LOGI("camera_hub", "%s=%s", capabilities.featureKey(feature),
@@ -91,12 +107,6 @@ extern "C" void app_main() {
     if (!wifi.waitForAp(pdMS_TO_TICKS(5000)) || wifi.apAddress() == 0) {
         ESP_LOGW("camera_hub", "Provisioning AP did not become ready");
         return;
-    }
-    if (cameraProbeResult.state == camera_hub::CameraProbeState::FrameCaptured) {
-        const auto cameraResult = cameraProbe.startPreview(cameraProbeResult);
-        if (cameraResult != ESP_OK)
-            ESP_LOGW("camera_hub", "Persistent camera preview did not start: %s",
-                     esp_err_to_name(cameraResult));
     }
     if (api.start(prerequisites, wifi.apAddress()) != ESP_OK) {
         ESP_LOGW("camera_hub", "Provisioning AP or HTTP start failed");

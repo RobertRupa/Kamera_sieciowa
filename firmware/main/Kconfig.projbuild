@@ -16,6 +16,14 @@ config APP_CAMERA_OV5647_DRIVER
         Build Espressif's OV5647 driver. Sensor detection and the one-frame
         development probe are controlled separately by APP_CAMERA_PROBE_ON_BOOT.
 
+config APP_USB_UVC_ENABLE
+    bool "Enable ESP32-P4 USB 2.0 HS MJPEG webcam (UVC device)"
+    depends on APP_CAMERA_OV5647_DRIVER && IDF_TARGET_ESP32P4
+    default y
+    help
+        Requires verified OTG device jumper and connector VBUS routing.
+        USB webcam enumeration is independent of Wi-Fi or the setup AP.
+
 config APP_CAMERA_PROBE_ON_BOOT
     bool "Run a one-frame MIPI-CSI hardware probe at boot"
     depends on APP_DEV_MODE && APP_CAMERA_OV5647_DRIVER
