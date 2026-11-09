@@ -3,6 +3,31 @@
 ## Official toolchain
 Use Visual Studio Code with the **Espressif IDF extension** (`espressif.esp-idf-extension`) and official installed ESP-IDF. Prefer maintained stable ESP-IDF 6.1 when target/BSP supports it; select compatible branch explicitly. Configure local Python/toolchain through extension/Espressif Installation Manager, not arbitrary system libraries. Use CMake + Ninja and IDF Component Manager; keep frontend build separate.
 
+### ESP-IDF "Set target failed" in the repository root
+
+If the ESP-IDF output shows `idf.py -B .../Kamera_sieciowa/build set-target esp32p4`
+followed by `Directory .../build doesn't seem to be a CMake build directory`,
+then **VS Code selected the repository root**, not the ESP-IDF project in
+`firmware/`. This is a project-selection error, not a sensor, flash or CPU
+detection problem.
+
+1. Open **File → Open Workspace from File** →
+   `Kamera_sieciowa.code-workspace`. This workspace now contains **only**
+   the `firmware/` project to make accidental root selection impossible.
+2. Or open the folder `firmware/` directly in a new VS Code window.
+   If using a custom multi-root workspace, choose **ESP-IDF: Pick a Workspace
+   Folder** → **ESP32-P4 Firmware (ESP-IDF)**.
+3. Run **ESP-IDF: Set Espressif Device Target** → `esp32p4`.
+   The output should now refer to `.../Kamera_sieciowa/firmware/build`.
+4. Build/flash from the official ESP-IDF Activity Bar.
+
+**Do not delete `.../Kamera_sieciowa/build`** to work around this error:
+that directory may contain independent host tests. The root folder's own
+`.vscode/settings.json` disables ESP-IDF activation by design; `firmware/`
+continues to enable it and uses `firmware/build`. ESP-IDF `set-target`
+normally performs a full clean of the selected firmware build directory, so
+avoid re-running it on every build.
+
 ## Camera_sieciowa: build and flash from the sidebar
 
 1. In VS Code select **File → Open Workspace from File** and open

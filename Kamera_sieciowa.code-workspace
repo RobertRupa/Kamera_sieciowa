@@ -3,15 +3,12 @@
     {
       "name": "ESP32-P4 Firmware (ESP-IDF)",
       "path": "firmware"
-    },
-    {
-      "name": "Repository & WebGUI",
-      "path": "."
     }
   ],
   "settings": {
     "idf.flashType": "UART",
-    "idf.saveBeforeBuild": true
+    "idf.saveBeforeBuild": true,
+    "idf.extensionActivationMode": "always"
   },
   "extensions": {
     "recommendations": [

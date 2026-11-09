@@ -2,5 +2,7 @@
   "cmake.sourceDirectory": "${workspaceFolder}/firmware",
   "files.associations": {
     "*.hpp": "cpp"
-  }
+  },
+  "idf.extensionActivationMode": "never",
+  "idf.saveBeforeBuild": true
 }

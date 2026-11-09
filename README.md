@@ -97,7 +97,7 @@ python scripts/prepare_web_assets.py
 For sidebar Build/Flash/Monitor, open
 [`Kamera_sieciowa.code-workspace`](Kamera_sieciowa.code-workspace) in
 VS Code, install the Espressif ESP-IDF extension, and select the
-`ESP32-P4 Firmware (ESP-IDF)` workspace folder. The extension's pre-build hook
+`ESP32-P4 Firmware (ESP-IDF)` workspace folder (the provided workspace contains only `firmware/`, not the repository root). The extension's pre-build hook
 runs the incremental WebGUI preparation automatically.
 
 Then, from an ESP-IDF 6.1 terminal:
