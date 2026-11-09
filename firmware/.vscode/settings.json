@@ -12,7 +12,9 @@
   "idf.openOcdConfigs": [
     "board/esp32p4-ftdi.cfg"
   ],
-  "idf.customExtraVars": {},
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32c6"
+  },
   "clangd.path": "/home/konatsu/.espressif/tools/esp-clangd/esp-21.1.3_20260408/esp-clangd/bin/clangd",
   "clangd.arguments": [
     "--background-index",
