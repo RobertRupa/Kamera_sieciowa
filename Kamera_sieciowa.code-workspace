@@ -1,8 +1,8 @@
 {
   "folders": [
     {
-      "name": "ESP32-P4 Firmware (ESP-IDF)",
-      "path": "firmware"
+      "name": "Kamera_sieciowa (ESP32-P4)",
+      "path": "."
     }
   ],
   "settings": {

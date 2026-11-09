@@ -1,0 +1,51 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default (Root ESP32-P4 development)",
+      "description": "Build Kamera_sieciowa/ repository root; sources in firmware/",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/default",
+      "cacheVariables": {
+        "IDF_TARGET": "esp32p4",
+        "SDKCONFIG": "${sourceDir}/build/default/sdkconfig",
+        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.defaults"
+      },
+      "vendor": {
+        "espressif/vscode-esp-idf": {
+          "schemaVersion": 1,
+          "settings": [
+            {
+              "type": "openOCD",
+              "value": {
+                "debugLevel": 2,
+                "configs": [
+                  "board/esp32p4-ftdi.cfg"
+                ],
+                "args": []
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "production",
+      "displayName": "Production (Root ESP32-P4)",
+      "description": "Build Kamera_sieciowa/ repository root; sources in firmware/",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/production",
+      "cacheVariables": {
+        "IDF_TARGET": "esp32p4",
+        "SDKCONFIG": "${sourceDir}/build/production/sdkconfig",
+        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.defaults"
+      }
+    }
+  ]
+}
