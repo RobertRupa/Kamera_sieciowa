@@ -43,7 +43,6 @@ constexpr std::size_t kFrameStorageBytes = kFrameSlotCount * kMaxJpegBytes;
 constexpr std::size_t kBufferAlignment = 64;
 constexpr std::uint16_t kOv5647ProductId = 0x5647;
 constexpr std::uint32_t kVideoFlags = ESP_VIDEO_INIT_FLAGS_MIPI_CSI | ESP_VIDEO_INIT_FLAGS_ISP;
-constexpr std::uint32_t kPreviewMaxFps = 20;
 
 struct CaptureBuffer {
     void* address{nullptr};
@@ -155,6 +154,7 @@ struct CameraHardwareProbe::State {
     std::mutex subscriberMutex;
     std::size_t httpSubscribers{0};
     std::atomic<bool> networkEnabled{false};
+    std::atomic<bool> usbActive{false};
     std::atomic<bool> keyFrameRequested{false};
     mutable std::mutex configurationMutex;
     camera_hub::CameraConfiguration configuration{};
@@ -344,8 +344,8 @@ esp_err_t CameraHardwareProbe::startPreview(const camera_hub::CameraProbeResult&
         parameters.parm.capture.timeperframe.numerator != 0) {
         const auto frameRate = parameters.parm.capture.timeperframe.denominator /
                                parameters.parm.capture.timeperframe.numerator;
-        const auto previewFrameRate = frameRate < kPreviewMaxFps ? frameRate : kPreviewMaxFps;
-        state.fps = static_cast<std::uint8_t>(previewFrameRate);
+        if (frameRate != 0 && frameRate <= UINT8_MAX)
+            state.fps = static_cast<std::uint8_t>(frameRate);
     }
 
     v4l2_requestbuffers request{};
@@ -411,8 +411,23 @@ esp_err_t CameraHardwareProbe::startPreview(const camera_hub::CameraProbeResult&
         releaseResources();
         return ESP_FAIL;
     }
-    state.configuration.settings.previewFps = state.fps == 0 ? 20 : state.fps;
-    state.fps = state.configuration.settings.previewFps;
+    // The selected driver mode defines the target FPS, without a global 20-FPS cap.
+    for (std::size_t index = 0; index < state.configuration.modeCount; ++index) {
+        const auto& mode = state.configuration.modes[index];
+        if (mode.id == state.configuration.settings.modeId) {
+            if (mode.sensorFps == 0 || mode.sensorFps > UINT8_MAX) {
+                releaseResources();
+                return ESP_ERR_NOT_SUPPORTED;
+            }
+            state.fps = static_cast<std::uint8_t>(mode.sensorFps);
+            break;
+        }
+    }
+    if (state.fps == 0) {
+        releaseResources();
+        return ESP_ERR_NOT_SUPPORTED;
+    }
+    state.configuration.settings.previewFps = state.fps;
     const auto captureType = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     if (ioctl(state.cameraFd, VIDIOC_STREAMON, &captureType) != 0) {
         releaseResources();
@@ -519,7 +534,9 @@ void CameraHardwareProbe::captureTask() noexcept {
                 hasHttpSubscribers = state.httpSubscribers != 0;
             }
             const auto now = esp_timer_get_time();
-            if ((validating || (hasHttpSubscribers && codec == camera_hub::VideoCodec::Jpeg) || state.networkEnabled.load()) &&
+            if ((validating || (hasHttpSubscribers && codec == camera_hub::VideoCodec::Jpeg) ||
+                 (state.usbActive.load() && codec == camera_hub::VideoCodec::Jpeg) ||
+                 state.networkEnabled.load()) &&
                 now - lastEncodeUs >= 1000000 / state.fps) {
                 std::uint32_t jpegSize = 0;
                 const auto* source = static_cast<const std::uint8_t*>(
@@ -628,6 +645,7 @@ esp_err_t CameraHardwareProbe::requestConfiguration(const camera_hub::CameraSett
     if (state_ == nullptr || !state_->running.load()) return ESP_ERR_INVALID_STATE;
     const std::lock_guard<std::mutex> lock(state_->configurationMutex);
     auto& configuration = state_->configuration;
+    if (state_->usbActive.load()) return ESP_ERR_INVALID_STATE;
     if (!camera_hub::validCameraSettings(configuration, settings)) return ESP_ERR_INVALID_ARG;
     if (configuration.state == camera_hub::ConfigurationState::Queued ||
         configuration.state == camera_hub::ConfigurationState::Applying) return ESP_ERR_INVALID_STATE;
@@ -695,6 +713,56 @@ esp_err_t CameraHardwareProbe::restartCapture(std::uint32_t modeId, camera_hub::
         state.jpegConfig.height = state.height;
     }
     return ESP_OK;
+}
+
+
+esp_err_t CameraHardwareProbe::startUsbStream(int width, int height, int fps) noexcept {
+    if (state_ == nullptr || state_->broker == nullptr || !state_->running.load())
+        return ESP_ERR_INVALID_STATE;
+    auto& state = *state_;
+    {
+        const std::lock_guard<std::mutex> lock(state.configurationMutex);
+        if (state.configuration.state == camera_hub::ConfigurationState::Queued ||
+            state.configuration.state == camera_hub::ConfigurationState::Applying)
+            return ESP_ERR_INVALID_STATE;
+        const camera_hub::SensorMode* selected = nullptr;
+        for (std::size_t i = 0; i < state.configuration.modeCount; ++i) {
+            const auto& mode = state.configuration.modes[i];
+            if (mode.width == width && mode.height == height && mode.sensorFps == fps &&
+                camera_hub::captureModeFits(mode) && mode.sensorFps <= UINT8_MAX) {
+                selected = &mode;
+                break;
+            }
+        }
+        if (selected == nullptr) return ESP_ERR_NOT_SUPPORTED;
+        auto requested = state.configuration.settings;
+        requested.modeId = selected->id;
+        requested.previewFps = static_cast<std::uint8_t>(selected->sensorFps);
+        requested.codec = camera_hub::VideoCodec::Jpeg;
+        if (!camera_hub::validCameraSettings(state.configuration, requested))
+            return ESP_ERR_NOT_SUPPORTED;
+        if (requested.modeId != state.configuration.settings.modeId ||
+            requested.codec != state.configuration.settings.codec ||
+            requested.previewFps != state.configuration.settings.previewFps) {
+            state.requestedSettings = requested;
+            state.configuration.state = camera_hub::ConfigurationState::Queued;
+        }
+        state.usbActive.store(true);
+    }
+    state.broker->setEnabled(camera_hub::Output::Usb, true);
+    return ESP_OK;
+}
+
+void CameraHardwareProbe::stopUsbStream() noexcept {
+    if (state_ == nullptr || state_->broker == nullptr) return;
+    state_->usbActive.store(false);
+    state_->broker->setEnabled(camera_hub::Output::Usb, false);
+}
+
+camera_hub::FrameLease CameraHardwareProbe::tryTakeUsbFrame() noexcept {
+    if (state_ == nullptr || state_->broker == nullptr || !state_->usbActive.load())
+        return {};
+    return state_->broker->tryTakeLatest(camera_hub::Output::Usb);
 }
 
 void CameraHardwareProbe::subscribeHttp() noexcept {

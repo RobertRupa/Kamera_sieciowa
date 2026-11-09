@@ -30,6 +30,10 @@ public:
     [[nodiscard]] CameraCaptureStatus captureStatus() const noexcept;
     [[nodiscard]] camera_hub::CameraConfiguration configuration() const noexcept;
     [[nodiscard]] esp_err_t requestConfiguration(const camera_hub::CameraSettings& settings) noexcept;
+    // USB subscribers receive the same immutable hardware-encoded JPEG frames.
+    [[nodiscard]] esp_err_t startUsbStream(int width, int height, int fps) noexcept;
+    void stopUsbStream() noexcept;
+    [[nodiscard]] camera_hub::FrameLease tryTakeUsbFrame() noexcept;
     void subscribeHttp() noexcept;
     void unsubscribeHttp() noexcept;
     [[nodiscard]] camera_hub::FrameLease tryTakeHttpFrame() noexcept;
