@@ -19,6 +19,11 @@ target_include_directories(profile_policy_tests PRIVATE "${DOMAIN_COMPONENT}/inc
 target_compile_features(profile_policy_tests PRIVATE cxx_std_17)
 add_test(NAME profile_policy COMMAND profile_policy_tests)
 
+add_executable(camera_configuration_tests camera_configuration_tests.cpp)
+target_include_directories(camera_configuration_tests PRIVATE "${DOMAIN_COMPONENT}/include")
+target_compile_features(camera_configuration_tests PRIVATE cxx_std_17)
+add_test(NAME camera_configuration COMMAND camera_configuration_tests)
+
 add_executable(camera_probe_result_tests camera_probe_result_tests.cpp
     "${DOMAIN_COMPONENT}/src/CameraProbeResult.cpp")
 target_include_directories(camera_probe_result_tests PRIVATE "${DOMAIN_COMPONENT}/include")
@@ -77,7 +82,7 @@ target_include_directories(capability_registry_tests PRIVATE "${CAPABILITY_COMPO
 target_compile_features(capability_registry_tests PRIVATE cxx_std_17)
 add_test(NAME capability_registry COMMAND capability_registry_tests)
 
-foreach(test_target frame_broker_tests profile_policy_tests camera_probe_result_tests provisioning_policy_tests wifi_credential_tests nvs_credential_store_tests network_provisioner_tests network_scan_service_tests capability_registry_tests)
+foreach(test_target frame_broker_tests profile_policy_tests camera_configuration_tests camera_probe_result_tests provisioning_policy_tests wifi_credential_tests nvs_credential_store_tests network_provisioner_tests network_scan_service_tests capability_registry_tests)
     if(MSVC)
         target_compile_options(${test_target} PRIVATE /W4 /WX)
     else()
