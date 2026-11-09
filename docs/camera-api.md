@@ -114,7 +114,7 @@ a same-origin deployment/proxy. Never configure credentialed wildcard CORS.
     "firmware_version": "0.1.0",
     "uptime_seconds": 0,
     "free_heap_bytes": 0,
-    "camera": { "width": 800, "height": 800, "fps": 20 },
+    "camera": { "width": 800, "height": 800, "fps": 50 },
     "camera_probe_state": "frame_captured",
     "camera_hardware": {
       "sensor": "OV5647",
@@ -127,17 +127,19 @@ a same-origin deployment/proxy. Never configure credentialed wildcard CORS.
 
 The camera values above match the currently tested device profile; uptime and
 heap values are illustrative. When persistent capture is running and has received
-a frame, `camera` contains its configured `width`, `height`, and capped `fps`.
+a frame, `camera` contains its configured `width`, `height`, and selected
+sensor-mode target `fps`, not a measured throughput figure.
 The one-frame probe itself stops and deinitializes capture. After the setup AP
 starts, a successful probe allows the application to initialize persistent
-capture; failure leaves `camera: null`.
+capture; failure leaves `camera: null`. On the UVC branch, capture starts
+before the Wi-Fi setup AP and remains alive if network startup fails.
 
 `camera_probe_state` is one of `not_run`, `no_supported_sensor`,
 `sensor_identified`, `frame_captured`, `capture_failed` or `error`. In the
 development profile, the probe initializes the supported OV5647 path over the
 shared Platform I2C bus and attempts to capture one MIPI-CSI frame. A successful
 frame verifies the sensor-to-CSI path for that boot. The application then starts
-the persistent preview only after network initialization; this does not mark the
+the persistent preview independently of network initialization; this does not mark the
 board profile verified. `no_supported_sensor`
 means no sensor supported by the compiled probe was found; an unpowered module,
 unsupported sensor or wiring fault can produce the same result.
@@ -187,8 +189,9 @@ server is local-only and unauthenticated, not a release transport. No device
 address or credentials are embedded in source. RTSP negotiates JPEG RTP/UDP on
 `rtsp://<device-address>:8554/cameras/csi-0`. Direct RTP/UDP uses the configured
 even receiver port and the SDP download below. Both use payload type 26 and a
-90 kHz clock; UDP frames above 256 KiB are dropped and counted. USB UVC remains
-unimplemented. Media endpoints are unauthenticated local-development services,
+90 kHz clock; UDP frames above 256 KiB are dropped and counted. The experimental
+USB UVC MJPEG transport is compiled separately and not yet hardware-verified.
+Media endpoints are unauthenticated local-development services,
 not an authenticated or encrypted release transport.
 
 ## Camera Inventory and Configuration
@@ -211,14 +214,20 @@ resolved-driver inventory, not a claim that every sensor datasheet mode or
 third-party module is supported. A change still requires a frame confirmation.
 
 PATCH `/api/v1/cameras/csi-0/config` requires a camera-session Bearer token and
-the required fields `mode_id` (integer 0..31), `preview_fps` (1..20, no greater than the sensor
-rate), and `jpeg_quality` (1..100). Invalid or over-budget settings return 400;
+the required fields `mode_id` (integer 0..31) and `jpeg_quality` (1..100).
+Optional fields are `codec` (`jpeg` or `h264`) and `h264_bitrate`.
+The server derives `preview_fps` automatically from the enumerated sensor mode;
+the client must not send a separate FPS control. Invalid or over-budget
+settings return 400;
 an operation already pending returns 409. A successful request returns 202.
 Poll the GET route for `queued`, `applying`, `applied`, or `failed`. The capture
 task stops/reallocates buffers for a mode change; it attempts rollback if the
 change fails or no first frame arrives within four seconds. Settings are not
-saved to NVS and revert on reboot. Preview FPS is an encoding/publication cap,
-not a sensor clock control. Exposure, gain, autofocus and module identification
+saved to NVS and revert on reboot. `settings.preview_fps` is retained as a
+read-only response field for compatibility. It equals nominal sensor mode FPS,
+not measured delivered FPS or a separate sensor clock control. Changes are
+rejected with 409 while USB UVC is streaming.
+Exposure, gain, autofocus and module identification
 are not fabricated or exposed as writable controls.
 
 POST `/api/v1/camera/session` accepts a bounded JSON `username`/`password` and

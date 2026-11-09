@@ -3,6 +3,42 @@
 ## Official toolchain
 Use Visual Studio Code with the **Espressif IDF extension** (`espressif.esp-idf-extension`) and official installed ESP-IDF. Prefer maintained stable ESP-IDF 6.1 when target/BSP supports it; select compatible branch explicitly. Configure local Python/toolchain through extension/Espressif Installation Manager, not arbitrary system libraries. Use CMake + Ninja and IDF Component Manager; keep frontend build separate.
 
+## Camera_sieciowa: build and flash from the sidebar
+
+1. In VS Code select **File → Open Workspace from File** and open
+   `Kamera_sieciowa.code-workspace` at the repository root.
+2. Install the recommended `espressif.esp-idf-extension` and configure
+   **ESP-IDF 6.1** (extension Setup / Espressif Installation Manager).
+3. In the left Activity Bar select **Espressif / ESP-IDF**. If prompted,
+   choose **ESP32-P4 Firmware (ESP-IDF)** as the current project folder.
+   Select target **esp32p4** and select the *programming/debug* serial
+   interface (Windows e.g. COM8; Linux e.g. /dev/ttyACM0).
+4. Use **Build Your Project**, **Flash Your Project**, **Monitor Device**
+   or **Build, Flash and Start a Monitor** in the Espressif sidebar.
+   Flash method is configured as **UART**; the USB HS OTG **UVC port**
+   is a different peripheral and is not a firmware flashing port.
+5. VS Code also exposes named **ESP32-P4:** tasks under
+   **Terminal → Run Task** (`firmware/.vscode/tasks.json`). They require
+   an ESP-IDF-initialized terminal environment. The official Espressif
+   sidebar is the preferred path because it configures the toolchain.
+
+The local-only ESP-IDF pre-build hook runs
+`python ../scripts/prepare_web_assets.py` from `firmware/`:
+it checks `web/src`, `web/public` and package metadata, runs `npm ci`
+only when dependencies are absent, and performs `npm run build`
+only when assets are missing or stale. **Node.js/npm is required**
+because `web_api` embeds generated assets. No implicit eFuse write,
+backup, erase, or full clean is performed. Project/serial paths are
+relative or auto-detected; pick your own serial port on each machine.
+
+### USB role caution
+
+Before connecting the computer to the dedicated USB OTG port, check
+the board's physical role selector, schematic and VBUS routing. Use
+USB **device** role for UVC. Never connect two USB hosts with a
+standard A-to-A cable. The existing USB-UART console/flash port
+remains separate.
+
 ## One-time device setup
 ```bash
 # Inside exported ESP-IDF environment

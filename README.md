@@ -11,7 +11,9 @@ below describe preceding stages, not the current device state.
 
 Latest camera hardware result: the ESP-IDF 6.1 firmware was incrementally
 flashed to `/dev/ttyACM0`. The device detected OV5647, received an 800x800 CSI
-frame, and served a persistent 800x800 MJPEG preview capped at 20 FPS. The
+frame, and served a persistent 800x800 MJPEG preview capped at 20 FPS (earlier tested baseline).
+The experimental USB UVC branch now targets the sensor's enumerated FPS instead;
+new USB and higher-FPS operation have not yet been tested on the device. The
 embedded WebGUI decoded a live frame. `http_mjpeg=ready`; the board-level
 `camera` capability remains `unverified` pending PCB revision and sustained
 operation checks. See [latest verification](docs/verification.md).
@@ -19,7 +21,7 @@ operation checks. See [latest verification](docs/verification.md).
 Development firmware for one MIPI-CSI camera on a Waveshare ESP32-P4-Module-DEV-KIT.
 The current unit has a verified OV5647 preview over HTTP MJPEG and a packaged
 device-side WebGUI, driver-derived runtime configuration, and RTP/UDP streams.
-USB UVC, simultaneous second-camera capture, IMX219 support, production authentication,
+USB UVC hardware validation, simultaneous second-camera capture, IMX219 support, production authentication,
 long-duration camera endurance and full release onboarding are not implemented
 or verified. The board's static camera capability remains `unverified`.
 The limited provisioning API and conditional AP/STA/mDNS startup are implemented.
@@ -50,7 +52,8 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
 	offered only for compatible native capture dimensions.
 - All five upstream OV5647 modes selectable, from 800x640 through 1920x1080,
   including 800x1280 portrait and 1280x960 binning; default remains 800x800.
-  Sensor FPS is distinct from the 20 FPS preview cap.
+  Target capture FPS now follows each selected sensor mode (no separate UI FPS
+  control); throughput can be lower due to hardware JPEG and USB/HTTP/RTP load.
 - RTSP-negotiated RTP/JPEG UDP and direct UDP with an SDP download. See the
 	[camera API](docs/camera-api.md) for ports, authentication and resource limits.
 - Latest-frame RTP delivery and bounded direct-UDP burst pacing reduce avoidable
@@ -66,9 +69,38 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
 	frame are observed, while PCB revision, module revision and sustained camera
 	readiness remain explicitly unverified.
 
+## USB UVC Webcam (experimental branch)
+
+- ESP32-P4 USB 2.0 **High-Speed OTG device** class, using Espressif
+  `usb_device_uvc ~1.3.1` with MJPEG/Bulk and existing FrameBroker JPEG frames.
+- Four advertised USB profiles: **800×800/50**, **800×640/50**,
+  **1280×960/45**, **1920×1080/30** FPS (nominal sensor mode rates).
+  The fifth sensor mode, 800×1280/50, remains selectable in WebGUI.
+- Windows Camera/OBS and Linux V4L2 can use the native webcam interface without
+  virtual camera software. The USB sink does not require Wi-Fi to start.
+- **Hardware warning:** verify the actual Waveshare USB OTG connector role jumper,
+  D+/D− wiring, and VBUS before connecting a computer. Use a suitable device-mode
+  connection, never an ordinary host-to-host USB-A cable.
+- New USB functionality and higher-than-20-FPS streaming are **not yet build- or
+  hardware-verified**. The observed baseline remains the earlier 20 FPS tests.
+  See [USB webcam bring-up](docs/usb-uvc.md) and
+  [VS Code build/flash](docs/build-flash-vscode.md).
+
 ## Build and Test
 
-From an ESP-IDF 6.1 terminal:
+From an ESP-IDF 6.1 terminal, prepare the embedded WebGUI once/when changed:
+
+```bash
+python scripts/prepare_web_assets.py
+```
+
+For sidebar Build/Flash/Monitor, open
+[`Kamera_sieciowa.code-workspace`](Kamera_sieciowa.code-workspace) in
+VS Code, install the Espressif ESP-IDF extension, and select the
+`ESP32-P4 Firmware (ESP-IDF)` workspace folder. The extension's pre-build hook
+runs the incremental WebGUI preparation automatically.
+
+Then, from an ESP-IDF 6.1 terminal:
 
 ```powershell
 Set-Location firmware
