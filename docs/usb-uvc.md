@@ -59,10 +59,10 @@ sources changed. To build manually from a configured ESP-IDF environment:
 
 ```bash
 python scripts/prepare_web_assets.py
-cd firmware
-idf.py set-target esp32p4 # first time only
-idf.py build
-idf.py -p /dev/ttyACM0 flash monitor # choose actual programming port
+# Run from the repository root (Kamera_sieciowa/).
+python3 scripts/prepare_web_assets.py
+idf.py --preset default build
+idf.py --preset default -p /dev/ttyACM0 flash monitor # choose actual programming port
 ```
 
 In Windows use your selected `COMx` port in place of `/dev/ttyACM0`.
