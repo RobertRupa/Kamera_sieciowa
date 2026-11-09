@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.22)
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+project(camera_hub_c6_migration)
+if(NOT IDF_TARGET STREQUAL "esp32p4")
+    message(FATAL_ERROR "The migration host must be ESP32-P4")
+endif()

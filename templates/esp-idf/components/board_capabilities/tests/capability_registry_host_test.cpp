@@ -20,13 +20,13 @@ int main() {
     compiled.displayDriver = true;
     compiled.touchDriver = true;
     compiled.lvgl = true;
-    compiled.encryptedNvs = true;
+    compiled.credentialStorage = true;
     RuntimeState runtime{};
 
     CapabilityRegistry unknown(example, compiled);
     assert(unknown.get(Feature::Wifi, runtime) == CapabilityState::Unverified);
     assert(unknown.get(Feature::Display, runtime) == CapabilityState::Unverified);
-    assert(unknown.get(Feature::EncryptedNvs, runtime) == CapabilityState::Unverified);
+    assert(unknown.get(Feature::CredentialStorage, runtime) == CapabilityState::Unverified);
     assert(unknown.get(Feature::WifiWizard, runtime) == CapabilityState::Unverified);
 
     // Simulation of an independently confirmed board, not actual hardware verification.
@@ -34,22 +34,22 @@ int main() {
     verified.wifiRadio = Verification::Verified;
     verified.display = Verification::Verified;
     verified.touch = Verification::Verified;
-    verified.nvsKeyProtection = Verification::Verified;
+    verified.credentialStoragePartition = Verification::Verified;
     CapabilityRegistry registry(verified, compiled);
 
     assert(registry.get(Feature::Wifi, runtime) == CapabilityState::NotReady);
     assert(registry.get(Feature::WebGui, runtime) == CapabilityState::NotReady);
     runtime.wifiLinkReady = true;
     assert(registry.get(Feature::Wifi, runtime) == CapabilityState::Ready);
-    assert(registry.get(Feature::EncryptedNvs, runtime) == CapabilityState::NotReady);
+    assert(registry.get(Feature::CredentialStorage, runtime) == CapabilityState::NotReady);
     assert(registry.get(Feature::WifiWizard, runtime) == CapabilityState::NotReady);
 
     runtime.wizardRunning = true;
     runtime.captivePortalRunning = true;
     assert(registry.get(Feature::WifiWizard, runtime) == CapabilityState::NotReady);
     assert(registry.get(Feature::CaptivePortal, runtime) == CapabilityState::NotReady);
-    runtime.encryptedNvsReady = true;
-    assert(registry.get(Feature::EncryptedNvs, runtime) == CapabilityState::Ready);
+    runtime.credentialStorageReady = true;
+    assert(registry.get(Feature::CredentialStorage, runtime) == CapabilityState::Ready);
     assert(registry.get(Feature::WifiWizard, runtime) == CapabilityState::Ready);
     assert(registry.get(Feature::CaptivePortal, runtime) == CapabilityState::Ready);
 

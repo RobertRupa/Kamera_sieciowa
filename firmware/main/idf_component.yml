@@ -1,0 +1,6 @@
+dependencies:
+  idf: "~6.1.0"
+  espressif/mdns: "*"
+  espressif/cjson: "*"
+  espressif/esp_wifi_remote: "*"
+  espressif/esp_hosted: "^3.1.0"

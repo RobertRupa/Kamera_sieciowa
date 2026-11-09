@@ -15,7 +15,7 @@ Check items with evidence; note N/A explicitly for unsupported hardware.
 ## Baseline features
 - [ ] Wi-Fi-capable target: STA + scan + reconnect, AP wizard, captive portal and direct AP IP fallback.
 - [ ] mDNS hostname and HTTP service advertised after IP readiness.
-- [ ] Credentials encrypted in NVS, **including ESP Wi-Fi driver's storage path**; key scheme supported by target.
+- [ ] Credentials stored in ordinary NVS; explicitly disclose plaintext-at-rest risk and verify no extra Wi-Fi-driver copy.
 - [ ] WebGUI dashboard/settings/Wi-Fi/security, authenticated API and responsive mobile UI.
 - [ ] Language selector: en default and pl shipped; locale key parity.
 - [ ] Theme: system/light/dark, saved in settings.
@@ -25,7 +25,7 @@ Check items with evidence; note N/A explicitly for unsupported hardware.
 ## Security and development
 - [ ] Dev vs release flags explicit; default `admin/admin` allowed **dev only**.
 - [ ] Dev warning shown; release build blocks defaults/debug routes.
-- [ ] Real encrypted NVS mechanism documented; no automatic irreversible eFuse burn.
+- [ ] NVS encryption/key derivation is not used; no automatic or routine eFuse operations.
 - [ ] No private passwords/tokens/NVS keys in repo, logs, WebGUI or diagnostics.
 - [ ] Normal upload has no backup/full erase/redundant hash comparison; built-in image integrity preserved.
 - [ ] Destructive Flash/partition/eFuse operations require explicit human approval.

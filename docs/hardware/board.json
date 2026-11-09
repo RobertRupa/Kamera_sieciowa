@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "kind": "esp-idf-hardware-manifest",
+  "example_only": false,
+  "board": {
+    "id": "waveshare-esp32-p4-module-dev-kit",
+    "vendor": "Waveshare",
+    "model": "ESP32-P4-Module-DEV-KIT",
+    "pcb_revision": null,
+    "schematic_url": "https://files.waveshare.com/wiki/ESP32-P4-Module-DEV-KIT/ESP32-P4-Module-DEV-KIT.pdf",
+    "notes": "Vendor model identified; the actual PCB revision and wiring have not been audited."
+  },
+  "primary_mcu": {
+    "idf_target": "esp32p4",
+    "soc": "ESP32-P4",
+    "chip_revision": "1.3",
+    "has_native_wifi": false,
+    "flash_bytes": 16777216,
+    "psram_bytes": 33554432,
+    "boot_console": "UART0 primary, USB-Serial/JTAG secondary",
+    "observed_windows_port": "COM8"
+  },
+  "radios": {
+    "wifi": {
+      "topology": "companion",
+      "verification": "unverified",
+      "companion_soc": "ESP32-C6",
+      "companion_firmware": "ESP-Hosted 3.1.0 (OTA from P4, runtime verified)",
+      "observed_compatibility": "host_and_coprocessor_3.1.0_match",
+      "transport_verification": "verified",
+      "rpc_verification": "verified_v2",
+      "credential_storage_build_policy": "C6 Wi-Fi driver NVS disabled by nvs_enable=0; P4 app stores plaintext credential record",
+      "transport": "SDIO",
+      "pinout_source": "docs/hardware/pin-map.md",
+      "pinout_status": "user_supplied_table",
+      "supported_driver_options": ["esp_wifi_remote", "esp_hosted"],
+      "notes": "C6 was upgraded by P4/SDIO using a temporary ESP-Hosted 2.13.1 legacy RPC host and application image 3.1.0. After restoring the 3.1.0 P4 host, runtime reported matching firmware, RPC V2, target esp32c6 and identity success. Wi-Fi/IP operation and credential persistence remain unverified; no Wi-Fi Ready state is inferred from transport success."
+    }
+  },
+  "ethernet": {
+    "verification": "unverified",
+    "interface": "RMII",
+    "phy": "IP101GRI",
+    "speed_mbps": 100,
+    "notes": "Vendor-documented RJ45/PHY; exact revision, PHY address, clock and reset wiring require audit."
+  },
+  "camera": {
+    "verification": "unverified",
+    "interface": "MIPI-CSI",
+    "module": "UC-439",
+    "module_revision": "B",
+    "reported_sensors": ["IMX219", "OV5647"],
+    "identification_source": "user_report",
+    "candidate_sensor": "OV5647",
+    "actual_sensor": null,
+    "supported_profiles": [],
+    "notes": "User reports connected UC-439 rev.B and sensor names IMX219/OV5647. These are alternative identities pending actual sensor detection, not two verified sensors or confirmed driver support."
+  },
+  "usb": {
+    "verification": "unverified",
+    "requested_role": "UVC device",
+    "notes": "Audit OTG device routing, jumpers and VBUS. Do not connect two hosts or use an ordinary A-to-A cable."
+  },
+  "display": {
+    "verification": "absent",
+    "interface": null,
+    "controller": null,
+    "width_px": null,
+    "height_px": null,
+    "rotation_deg": null,
+    "backlight_gpio": null,
+    "source": null
+  },
+  "touch": {
+    "verification": "absent",
+    "controller": null,
+    "interface": null,
+    "i2c_address": null,
+    "source": null
+  },
+  "security": {
+    "wifi_credential_storage": {
+      "mode": "plaintext_nvs",
+      "physical_readout_confidentiality": "none",
+      "partition": "app_config",
+      "partition_offset": "0xe10000",
+      "namespace": "camera_hub",
+      "record": "wifi_v1",
+      "c6_driver_nvs": "disabled_by_nvs_enable_zero",
+      "source_audit": "verified",
+      "hardware_write_read_reboot_test": "not_run",
+      "notes": "P4 application is the only persistent owner by source configuration. ESP-Hosted 3.1.0 forwards nvs_enable=0 to C6 Wi-Fi initialization. The remote esp_wifi_set_storage API is a no-op. Flash dumps can reveal saved SSID and passphrase."
+    },
+    "hmac_efuse": {
+      "metadata_verification": "verified",
+      "key_present": true,
+      "slot": 0,
+      "purpose": "HMAC_UP",
+      "read_protected": true,
+      "write_protected": true,
+      "used_for_nvs": false,
+      "historical_authorization": "BLOCK_KEY0 HMAC_UP with read/write protection only; completed 2026-11-08"
+    },
+    "secure_boot_enabled": false,
+    "flash_encryption_enabled": false
+  },
+  "pins": [
+    {"signal": "CAMERA_SDA", "gpio": 7, "direction": "bidir", "source": "docs/hardware/pin-map.md"},
+    {"signal": "CAMERA_SCL", "gpio": 8, "direction": "output", "source": "docs/hardware/pin-map.md"},
+    {"signal": "CAMERA_RESET", "gpio": null, "direction": "output", "source": null},
+    {"signal": "ETH_PHY_RESET", "gpio": 51, "direction": "output", "source": "docs/hardware/pin-map.md"},
+    {"signal": "WIFI_SDIO_CLK", "gpio": 18, "direction": "output", "source": "docs/hardware/pin-map.md"},
+    {"signal": "WIFI_SDIO_CMD", "gpio": 19, "direction": "bidir", "source": "docs/hardware/pin-map.md"},
+    {"signal": "WIFI_SDIO_D0", "gpio": 14, "direction": "bidir", "source": "docs/hardware/pin-map.md"},
+    {"signal": "WIFI_SDIO_D1", "gpio": 15, "direction": "bidir", "source": "docs/hardware/pin-map.md"},
+    {"signal": "WIFI_SDIO_D2", "gpio": 16, "direction": "bidir", "source": "docs/hardware/pin-map.md"},
+    {"signal": "WIFI_SDIO_D3", "gpio": 17, "direction": "bidir", "source": "docs/hardware/pin-map.md"},
+    {"signal": "WIFI_COMPANION_EN", "gpio": 54, "direction": "output", "source": "docs/hardware/pin-map.md"},
+    {"signal": "WIFI_COMPANION_GPIO2", "gpio": 6, "direction": "bidir", "source": "docs/hardware/pin-map.md"}
+  ],
+  "firmware_policy": {
+    "wifi_wizard": "required_if_wifi_verified",
+    "captive_portal": "required_if_wifi_verified",
+    "mdns": "required_if_ip_available",
+    "webgui": "required_if_ip_available",
+    "lvgl": "not_selected_no_attached_display",
+    "credential_storage": "plaintext_nvs; disclose_flash_readout_risk",
+    "local_dev_login": "no_default_account_created"
+  },
+  "evidence": [
+    {
+      "claim": "Read-only ROM queries observed P4 rev.1.3 and 16 MiB flash; PCB revision remains unknown. BLOCK_KEY0/HMAC_UP metadata is documented in the current security section.",
+      "source": "docs/verification.md#wi-fi-and-mdns-implementation"
+    },
+    {
+      "claim": "Model has P4, C6/SDIO, 16 MiB Flash, 32 MiB PSRAM, IP101GRI Ethernet, MIPI-CSI and USB OTG HS; these are vendor facts, not runtime readiness.",
+      "source": "https://www.waveshare.com/wiki/ESP32-P4-Module-DEV-KIT-StartPage"
+    },
+    {
+      "claim": "OV5647 has an upstream sensor driver; actual camera/cable compatibility remains unknown.",
+      "source": "https://github.com/espressif/esp-video-components/tree/master/esp_cam_sensor"
+    },
+    {
+      "claim": "Upstream esp_video UVC example supports ESP32-P4; combined UVC/HTTP/RTSP is not yet integrated.",
+      "source": "https://github.com/espressif/esp-video-components/tree/master/esp_video/examples/uvc"
+    }
+  ],
+  "needs_verification": [
+    "PCB revision and schematic correspondence",
+    "Actual sensor, connector, ribbon orientation, supply and XCLK",
+    "USB device routing, jumpers, VBUS protection and appropriate cable",
+    "PHY address, RMII clock/reset and all assigned GPIOs",
+    "Supplied GPIO table correspondence to the actual PCB revision, C6_EN electrical behavior and host/companion firmware compatibility",
+    "Actual Flash/PSRAM boot probe and camera DMA/cache requirements",
+    "Plain NVS app_config read/write/reboot persistence and C6 no-duplicate-write behavior on hardware",
+    "JPEG profile compatibility with UVC and RFC 2435 RTSP packetizer"
+  ]
+}

@@ -13,12 +13,19 @@ Use official `esp_wifi`, `esp_netif` and `esp_event`. Keep event callbacks short
 - Preserve user access during AP→STA switch: display new IP and mDNS name when known; do not assume browser follows networks automatically.
 - Protect configuration endpoints with a limited provisioning session token and bounded time/attempts. Separate from admin permissions.
 
-## Secure credential transaction
+## Credential transaction
 1. Validate SSID/password constraints and HTTP body limits.
-2. Persist in **genuinely encrypted NVS**; ensure driver does not write an extra plaintext copy to default NVS. See [Security profiles](security-and-profiles.md).
+2. Persist the credential record in ordinary, unencrypted NVS. Do not claim at-rest confidentiality; ensure the Wi-Fi companion driver does not persist a second copy. See [Security profiles](security-and-profiles.md).
 3. Start network change asynchronously and return operation ID. Handle power interruption and specify retention/rollback behavior on failed connection.
 4. After IP acquired, expose mDNS and normal WebGUI. Test credentials retained after power cycle and recoverable wrong-password flow.
 5. Never log/store passwords in HTTP GET responses, events or crash diagnostics.
+At boot, after the plaintext NVS store and AP provisioning API are ready, the
+application may load the saved credential record and request a STA connection.
+This read does not rewrite credentials. A missing record leaves the AP wizard
+available; storage or driver errors fail the operation without clearing the
+record. The current composition keeps the AP up while STA connects and applies
+a 30-second connection deadline. Automatic retry/backoff and radio-level
+reboot-retention verification remain pending.
 
 ## mDNS
 Use `espressif/mdns` to publish sanitized configurable `<device>-<id>.local` plus `_http._tcp` and `_https._tcp` if active; TXT may include firmware/API version but never secrets. Start on IP-ready events, update on IP/interface/name change; do not assume resolution across VLANs/client isolation, expose numeric IP too.

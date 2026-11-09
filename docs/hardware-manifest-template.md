@@ -28,7 +28,7 @@ Copy into the firmware repository as `docs/hardware.md` and replace every TBD wi
 - Wi-Fi driver: native / remote adapter / unsupported; firmware/protocol for companion:
 - AP wizard + mDNS feasibility:
 - Display LVGL feasibility/driver:
-- Encrypted NVS key-protection scheme supported by chip, selected partitions and impact on fast developer flash:
+- Credential NVS partition, plain-storage risk disclosure and Wi-Fi driver persistence path:
 - Partitions (NVS/NVS keys/app/UI/OTA as needed) and Flash budget:
 - Draw buffers location and DMA/PSRAM constraints:
 - Tasks/queues with stack/heap reservations:

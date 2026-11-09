@@ -37,6 +37,6 @@ No service is initialized by this component. Integrate an ESP-IDF adapter that:
 
 Use a consistent runtime snapshot for all capabilities to avoid torn/cross-task reads; reconcile if service statuses are updated concurrently. Registry readiness is advisory, not authorization or a transactional guarantee. Recheck permissions and actual state in every action handler.
 
-A direct `wifiLinkReady` signal does not mean an assigned IP, and an HTTP server running does not imply it is reachable. Do not set `encryptedNvsReady` from a config flag alone: verify key protection and Wi-Fi driver persistence path.
+A direct `wifiLinkReady` signal does not mean an assigned IP, and an HTTP server running does not imply it is reachable. Do not set `credentialStorageReady` from a config flag alone: verify ordinary NVS initialization and Wi-Fi driver persistence path.
 
 See [Security profiles](../../../../docs/security-and-profiles.md) and [Hardware and Capability Registry](../../../../docs/hardware-and-capabilities.md).

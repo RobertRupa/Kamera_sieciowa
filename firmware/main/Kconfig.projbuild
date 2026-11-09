@@ -1,0 +1,41 @@
+menu "Camera Hub"
+
+config APP_DEV_MODE
+    bool "Development diagnostic firmware"
+    default y
+    help
+        Camera and network startup remain blocked until hardware/security verification.
+        Disable for release.
+
+config APP_DEV_DEFAULT_CREDENTIALS
+    bool "Permit insecure development defaults"
+    depends on APP_DEV_MODE
+    default n
+    help
+        Reserved for a future authenticated development UI. No account is created.
+
+config APP_WIFI_WIRING_VERIFIED
+    bool "C6 transport pinout matches this board and configured ESP-Hosted transport"
+    default n
+    help
+        Enable only after checking the actual schematic and ESP-Hosted bus configuration.
+
+config APP_C6_TRANSPORT_PROBE
+    bool "Read-only C6 handshake/identity probe (no AP/STA or credentials)"
+    depends on APP_DEV_MODE && APP_WIFI_WIRING_VERIFIED
+    default n
+
+config APP_C6_STORAGE_AUDITED
+    bool "C6 Wi-Fi driver NVS is disabled; credentials persist only on P4"
+    default n
+    help
+        The matching ESP-Hosted companion must honor nvs_enable=0 during Wi-Fi initialization.
+
+config APP_DEV_OPEN_SETUP_AP
+    bool "Authorize local development open provisioning AP"
+    depends on APP_DEV_MODE
+    default n
+    help
+        Local laboratory only. No release activation or public deployment.
+
+endmenu

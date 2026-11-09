@@ -77,8 +77,8 @@ firmware/
 │   │   └── src/EspWifiService.cpp
 │   ├── persistence/
 │   │   ├── CMakeLists.txt
-│   │   ├── include/persistence/EncryptedNvsStore.hpp
-│   │   └── src/EncryptedNvsStore.cpp
+│   │   ├── include/persistence/NvsCredentialStore.hpp
+│   │   └── src/NvsCredentialStore.cpp
 │   ├── provisioning/
 │   │   ├── CMakeLists.txt
 │   │   ├── include/provisioning/ApWizard.hpp

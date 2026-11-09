@@ -48,9 +48,9 @@ CapabilityState CapabilityRegistry::get(Feature feature, const RuntimeState& liv
                 return CapabilityState::Unsupported;
             return withHardware(board_.wifiRadio, built_.wifiAdapter, live.wifiLinkReady);
 
-        case Feature::EncryptedNvs:
-            return withHardware(board_.nvsKeyProtection,
-                                built_.encryptedNvs, live.encryptedNvsReady);
+        case Feature::CredentialStorage:
+            return withHardware(board_.credentialStoragePartition,
+                                built_.credentialStorage, live.credentialStorageReady);
 
         case Feature::Display:
             return withHardware(board_.display, built_.displayDriver, live.displayReady);
@@ -65,9 +65,9 @@ CapabilityState CapabilityRegistry::get(Feature feature, const RuntimeState& liv
         }
 
         case Feature::WifiWizard: {
-            // MUST NOT offer credential persistence until encrypted NVS is ready.
+            // Do not offer credential persistence until ordinary NVS is ready.
             const auto deps = dependencies(get(Feature::Wifi, live),
-                                           get(Feature::EncryptedNvs, live));
+                                           get(Feature::CredentialStorage, live));
             if (deps != CapabilityState::Ready) return deps;
             return enabledAndRunning(built_.wifiWizard, live.wizardRunning);
         }
@@ -114,7 +114,7 @@ const char* CapabilityRegistry::featureKey(Feature feature) noexcept {
         case Feature::Display: return "display";
         case Feature::Touch: return "touch";
         case Feature::Lvgl: return "lvgl";
-        case Feature::EncryptedNvs: return "encrypted_nvs";
+        case Feature::CredentialStorage: return "credential_storage";
         case Feature::Count: break;
     }
     return "unknown";

@@ -24,7 +24,7 @@ struct BoardProfile {
     Verification wifiRadio;
     Verification display;
     Verification touch;
-    Verification nvsKeyProtection;
+    Verification credentialStoragePartition;
 };
 
 // Demonstration ONLY. Returned profile deliberately has no verified peripherals.

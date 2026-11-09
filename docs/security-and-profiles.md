@@ -1,4 +1,17 @@
-# Development vs release security profile and encrypted NVS
+# Security profiles and plaintext NVS
+
+## Current Device Key State
+
+The user-authorized BLOCK_KEY0/HMAC_UP key was programmed on COM8 on 2026-11-08,
+with official read/write and purpose protections verified. It cannot be exported
+or rewritten. Secure Boot and Flash Encryption were not enabled. The temporary
+key file was removed, and no key values were logged or committed. Older statements
+below that the device has no key refer to earlier stages.
+
+This verifies key metadata/protection only. Current firmware does not use this
+key for NVS, and plaintext credential storage makes no at-rest confidentiality
+claim. Never rerun key generation as part of normal build, flash, onboarding or
+retries.
 
 ## Two explicit profiles
 | Setting | `dev` (local lab) | `release` (networked deployment) |
@@ -8,7 +21,7 @@
 | Serial/JTAG | available for development | as required by deployment threat model |
 | HTTP | local AP/LAN allowed with security warning | HTTPS or justified protected-network transport; protect credentials |
 | AP wizard | first boot/fallback, time-bound and rate-limited | access-controlled, unique setup secret/physical trigger |
-| NVS Wi-Fi credentials | **encrypted at rest required** | **encrypted at rest required** |
+| NVS Wi-Fi credentials | Plaintext; warn Flash readers can recover them | Plaintext by project policy; warn Flash readers can recover them |
 | Flash encryption/eFuses | plan separately; irreversible effects require authorization | enforce target-specific key strategy and production policy |
 | OTA | optional in dev; no forced backup | signed/validated rollout as required |
 | Checksum/integrity | ESP-IDF default intrinsic checks remain | ESP-IDF intrinsic checks remain |
@@ -20,16 +33,34 @@
 - Prefer hashed password verification and session cookies rather than plain comparison in controllers. Debug-only compiled-in default is not a secret; keep it out of reusable production firmware.
 - No known real Wi-Fi passphrase or public IP embedded in source, `sdkconfig.defaults`, frontend bundle or logs.
 
-## Encrypted NVS is not just an encrypted flag
-ESP-IDF stores Wi-Fi credentials in the **default NVS** unless driver storage is configured otherwise. If that partition is plaintext, writing a second encrypted copy elsewhere does **not** satisfy the requirement.
+## Plaintext NVS policy
+This project intentionally stores Wi-Fi credentials unencrypted in the ordinary
+`app_config` NVS partition, namespace `camera_hub`, key `wifi_v1`. This policy
+applies to development and release firmware. Anyone able to read or dump Flash
+can recover the stored SSID and passphrase. Do not describe the data as encrypted,
+protected at rest, or confidential against physical access.
 
-Supported implementation choices (verify per chip and ESP-IDF release):
-1. Configure ESP-IDF NVS encryption, suitable `nvs_keys` key partition, and a protected key scheme (typically Flash Encryption-based; supported devices may provide an HMAC-based scheme).
-2. Alternatively select `esp_wifi_set_storage(WIFI_STORAGE_RAM)` and persist credentials only through a verified encrypted NVS partition, restoring them to Wi-Fi at connection time; audit every code path.
+The P4 application is the only persistent credential owner. ESP-Hosted passes
+`nvs_enable=0` to the matching C6 Wi-Fi initialization, disabling the companion
+driver's NVS path. The remote `esp_wifi_set_storage()` implementation is a no-op;
+do not rely on `WIFI_STORAGE_RAM` as proof of persistence behavior. The C6 source
+and matching 3.1.0 runtime identity have been audited. AP startup and DHCP at
+`192.168.4.1` were observed; Windows did not detect the AP SSID, and client
+reachability, STA operation and credential reboot persistence remain untested.
 
-Important: standard NVS **must not** simply be flagged `encrypted` in partition CSV and assumed protected. Encryption is implemented by the NVS library and its dedicated key mechanism. Key storage and first-boot initialization must be designed. Flash Encryption can require eFuse writes and change development flashing capabilities. **Never burn eFuses automatically** as part of ordinary build/flash scripts. If the chip does not support an acceptable non-irreversible NVS key mechanism, document the conflict explicitly and obtain authorization before irreversible security setup. Do not fake encryption with XOR, ROT, encoding or a key stored next to ciphertext in readable Flash.
+The NVS adapter uses ordinary `nvs_flash_init_partition`, the `camera_hub`
+namespace and one fixed 98-byte versioned blob. Writes use `nvs_set_blob` followed
+by `nvs_commit`; clear removes only `wifi_v1`. Initialization or read/write
+errors never trigger partition erase, format, credential logging, or eFuse
+operations. Existing records from any earlier format are not migrated or erased
+automatically; a failed plain-NVS open must be investigated without destructive
+recovery.
 
-Official reference: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/storage/nvs_encryption.html
+BLOCK_KEY0/HMAC_UP was provisioned and protected on COM8 on 2026-11-08 under
+separate authorization. This firmware does not derive or use that key for NVS.
+Secure Boot and Flash Encryption remain disabled. Do not regenerate keys, burn
+eFuses, enable flash encryption, or change the partition table as part of normal
+build, onboarding, or flashing.
 
 ## Web API security minimum
 - Authenticated session for settings, reboot, scans of local networks and firmware actions; provisioning session has limited scope and timeout.
@@ -43,4 +74,7 @@ Official reference: https://docs.espressif.com/projects/esp-idf/en/latest/esp32/
 The first enablement of Flash Encryption, key provisioning, Secure Boot or anti-rollback may be device-irreversible. Require a separate documented operation with explicit human authorization. Development build/flash fast path must **not** include these steps. Ordinary ESP-IDF firmware image integrity mechanisms remain enabled even when skipping human checksum comparisons.
 
 ## Acceptance evidence
-Before calling the device “encrypted NVS capable”, capture target, IDF version, config flags, partition scheme, Wi-Fi storage mode and a read/write/reboot test verifying that credentials survive restart without plain copies. When physical readout verification is unavailable, say precisely what has and has not been validated.
+Capture target, IDF version, config flags, partition scheme, C6 `nvs_enable` setting,
+and read/write/reboot test results. Confirm the application is the only persistent
+credential owner. State plainly that Flash confidentiality is not provided. When
+hardware readback or reboot verification is unavailable, report it as not tested.

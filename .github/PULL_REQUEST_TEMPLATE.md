@@ -7,7 +7,7 @@
 - [ ] AGENTS.md and applicable docs reviewed
 - [ ] Hardware facts sourced (no assumed GPIOs)
 - [ ] Domain/services/adapters and MVC layering preserved
-- [ ] Encrypted NVS or explicit unresolved target/security blocker
+- [ ] Plaintext NVS risk documented and Wi-Fi driver persistence path audited
 - [ ] Dev-only admin/admin; release guard and secret/log review
 - [ ] Wi-Fi/AP/mDNS/WebGUI/LVGL capabilities handled as applicable
 - [ ] Build / host tests / frontend tests run (list actual output)

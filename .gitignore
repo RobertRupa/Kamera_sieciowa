@@ -1,0 +1,17 @@
+/build/
+/firmware/build/
+/firmware/sdkconfig
+/firmware/sdkconfig.old
+/firmware/managed_components/
+/migration/**/managed_components/
+/migration/**/sdkconfig
+/migration/**/sdkconfig.old
+/migration/host_legacy/main/c6_image.bin
+/web/node_modules/
+/web/dist/
+/web/test-results/
+/web/playwright-report/
+*.pem
+*.key
+.env
+.env.local

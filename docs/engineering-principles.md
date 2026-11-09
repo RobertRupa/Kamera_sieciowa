@@ -31,7 +31,7 @@ Correctness + hardware truth > safety/security invariants > compatibility > clar
 - Explicit UTF-8 for translations, stable machine-readable translation keys, no hard-coded language strings in UI classes.
 
 ## Configuration hierarchy
-`Board hardware manifest → sdkconfig.defaults/Kconfig → compile-time feature flags → encrypted runtime settings (NVS) → transient state`. Do not hardcode GPIO pin numbers inside business logic. Validate a persisted settings schema version; migrate or reset only owned namespaces, never entire Flash as routine recovery.
+`Board hardware manifest → sdkconfig.defaults/Kconfig → compile-time feature flags → plaintext runtime settings (NVS) → transient state`. Do not hardcode GPIO pin numbers inside business logic. Validate a persisted settings schema version; migrate or reset only owned namespaces, never entire Flash as routine recovery.
 
 ## Real-time policy
 - Never delay in a network event callback, LVGL tick hook or ISR.

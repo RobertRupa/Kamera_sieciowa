@@ -10,7 +10,7 @@ BoardProfile makeIllustrativeP4C6Profile() noexcept {
         Verification::Unverified, // Actual P4<->C6 transport not verified.
         Verification::Unverified, // LCD controller/pins not verified.
         Verification::Unverified, // Touch controller/pins not verified.
-        Verification::Unverified, // Protected NVS key mechanism not verified.
+        Verification::Unverified, // Credential storage partition not verified.
     };
 }
 

@@ -17,7 +17,7 @@ enum class Feature : std::uint8_t {
     Display,
     Touch,
     Lvgl,
-    EncryptedNvs,
+    CredentialStorage,
     Count,
 };
 
@@ -40,7 +40,7 @@ struct BuildFeatures {
     bool displayDriver{false};
     bool touchDriver{false};
     bool lvgl{false};
-    bool encryptedNvs{false};
+    bool credentialStorage{false};
 };
 
 // Consistent snapshot captured by the application from live service contracts.
@@ -55,7 +55,7 @@ struct RuntimeState {
     bool displayReady{false};
     bool touchReady{false};
     bool lvglRunning{false};
-    bool encryptedNvsReady{false}; // Set true ONLY after real key/storage checks.
+    bool credentialStorageReady{false};
 };
 
 constexpr std::size_t kFeatureCount = static_cast<std::size_t>(Feature::Count);

@@ -15,7 +15,7 @@
 | Architect / coordinator | ADRs, capability matrix, APIs/contracts, task graph | no unresolved cross-module assumptions |
 | BSP / drivers | `board_support`, LCD/touch/radio pin map, drivers | pin references verified against schematic/BSP |
 | Connectivity | Wi-Fi adapter, AP, mDNS, captive portal | first boot → provision → reconnect → fallback |
-| Security/storage | encrypted NVS schema, dev/release gates, auth | encrypted key strategy confirmed per chip |
+| Security/storage | plaintext NVS schema, dev/release gates, auth | Flash-readout exposure documented; driver path audited |
 | Backend/API | application services, controllers, JSON/API | tests against DTO and error contract |
 | Frontend | Vue + Vite + PrimeVue WebGUI, locale/theme | en/pl and light/dark/system tested |
 | LVGL | GUI views/presenters, touch input, thread ownership | builds for display target; no off-thread LVGL calls |
@@ -37,7 +37,7 @@ outputs:
   - EspWifiService.hpp
   - EspWifiService.cpp
 depends_on:
-  - encrypted-nvs-contract
+  - credential-storage-contract
 constraints:
   - no plaintext password logging
   - event handler must not block
@@ -66,7 +66,7 @@ Public contracts/API or schema changed:
 Dependencies / resolved versions:
 Build / lint / tests executed (commands and results):
 Hardware validation (yes/no, device, actual output):
-Security state (dev/release; encrypted-NVS strategy):
+Security state (dev/release; plaintext NVS exposure):
 Known gaps, assumptions and next action:
 ```
 
