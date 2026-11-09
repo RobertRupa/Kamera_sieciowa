@@ -211,7 +211,7 @@ resolved-driver inventory, not a claim that every sensor datasheet mode or
 third-party module is supported. A change still requires a frame confirmation.
 
 PATCH `/api/v1/cameras/csi-0/config` requires a camera-session Bearer token and
-exactly `mode_id` (integer 0..31), `preview_fps` (1..20, no greater than the sensor
+the required fields `mode_id` (integer 0..31), `preview_fps` (1..20, no greater than the sensor
 rate), and `jpeg_quality` (1..100). Invalid or over-budget settings return 400;
 an operation already pending returns 409. A successful request returns 202.
 Poll the GET route for `queued`, `applying`, `applied`, or `failed`. The capture
@@ -265,3 +265,41 @@ ffplay -protocol_whitelist file,udp,rtp -fflags nobuffer -flags low_delay -frame
 ```
 
 These are receiver tuning suggestions, not measured glass-to-glass latency.
+
+## Hardware Codec Selection
+
+GET camera configuration additionally returns `hardware_codecs:["jpeg","h264"]`,
+`settings.codec`, `settings.h264_bitrate`, and `modes[].h264_available`.
+PATCH accepts optional `codec` (`jpeg` or `h264`) and `h264_bitrate` (integer
+64,000..10,000,000 bit/s); omitted fields retain the current values for legacy
+clients. Unknown codecs, fields, duplicate keys and incompatible mode/codec
+combinations are rejected. Default is hardware JPEG, 2,000,000 bit/s H.264 target
+bitrate (used only when H.264 is selected). Settings remain runtime-only.
+
+JPEG uses P4 hardware `esp_driver_jpeg` from RGB565 capture. H.264 uses
+`esp_h264_enc_hw_new`, never the software encoder, from native ISP YUV420 packed
+capture. There is no spatial scaling, rotating, mirroring or cropping added
+between capture and transport. Color-format conversion/encoding is not a
+bit-for-bit RAW pass-through. H.264 is limited by the hardware library and, in
+this integration, requires width and height divisible by 16 so no padding or
+geometry changes are silently introduced. Consequently the existing 1920x1080
+mode is JPEG-only here; the four other current modes are H.264 eligible.
+This does not implement the previously requested 5 MP/90/120 FPS sensor profiles.
+
+`applied` now requires a successfully encoded and published first frame.
+Reconfiguration failure attempts to restore both capture format and encoder.
+Each broker lease carries its codec, so old JPEG and H.264 frames cannot be
+mislabeled. A codec switch tears down existing RTSP sessions and stops direct
+UDP; reopen the stream and enable/download fresh SDP for the new codec.
+
+H.264 uses RFC 6184 FU-A packetization, dynamic RTP payload 96 and
+`H264/90000; packetization-mode=1`; JPEG retains payload 26. New H.264 receivers
+request a hardware IDR on the capture task and outgoing data waits for IDR.
+Periodic IDRs contain SPS/PPS. H.264 uses the bounded FIFO rather than deliberately
+skipping dependent frames as JPEG can; packet loss can still interrupt decoding
+until a keyframe arrives. RTP frame size and network budgets remain bounded.
+
+The inventory/status and UDP snapshots include `codec`. Under H.264,
+`mjpeg_path` is null, `http_mjpeg` is disabled, and port-81 MJPEG requests return
+409 `mjpeg_requires_jpeg_codec`. RTSP remains available with H.264 SDP. The GUI
+shows the network codec state instead of loading H.264 bytes into a JPEG image.

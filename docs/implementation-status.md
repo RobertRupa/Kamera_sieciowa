@@ -62,6 +62,7 @@ connector is DSI, not CSI. See [camera verification](verification.md).
 | Device status/capabilities API | HTTP GET and embedded browser GUI verified | `/api/v1/device/status` reports OV5647 and `frame_captured`; capability remains `unverified` |
 | OV5647 capture and FrameBroker | Implemented; live frame verified on current unit | 800x800 RGB565 capture, P4 hardware JPEG, bounded 10 MiB PSRAM frame pool; preview capped at 20 FPS |
 | HTTP MJPEG preview | Implemented and verified on current unit | Port 81 `/stream.mjpg`; HTTP 200; browser decoded 800x800; readiness is conditional on active capture/server |
+| Hardware codec selection | Implemented; JPEG/H.264 switching decoded on current unit | Hardware H.264 via native YUV420, bitrate control, payload 96/SDP, codec-tagged leases; MJPEG unavailable under H.264; unaligned modes rejected |
 | Camera configuration | Implemented; FPS/quality change verified on hardware | Actual driver mode enumeration, peer-bound dev session, asynchronous capture-task application and first-frame confirmation |
 | RTP/JPEG over UDP | Implemented; both receiver paths decoded on hardware | Managed espp/rtsp 1.4.2, RTSP port 8554 and direct RTP/SDP, bounded frames and destination |
 | One-frame camera probe | Implemented and passed on current unit | OV5647 PID `0x5647`; one 800x800 MIPI-CSI frame (1,280,000 bytes); preview starts after AP initialization |

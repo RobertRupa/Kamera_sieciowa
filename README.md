@@ -45,6 +45,9 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
 - Host tests covering ownership, slow clients, pool exhaustion and concurrent readers.
 - Persistent OV5647 preview through the bounded FrameBroker and HTTP MJPEG endpoint.
 - Driver-enumerated camera settings and per-camera MJPEG/RTSP links in the WebGUI.
+- Selectable hardware JPEG or hardware H.264 encoder, with H.264 target bitrate
+	and codec-correct RTSP/RTP UDP/SDP. H.264 has no browser MJPEG preview and is
+	offered only for compatible native capture dimensions.
 - All five upstream OV5647 modes selectable, from 800x640 through 1920x1080,
   including 800x1280 portrait and 1280x960 binning; default remains 800x800.
   Sensor FPS is distinct from the 20 FPS preview cap.
@@ -148,8 +151,9 @@ readiness remain unverified. Do not connect two USB hosts or use an ordinary
 A-to-A cable; audit device routing, jumpers and VBUS first.
 
 First-version scope: USB MJPEG, HTTP MJPEG, RTSP/RTP JPEG, Ethernet and Wi-Fi.
-No WebRTC, HLS, ONVIF, audio, recording, LCD or H.264 is included. NVRs requiring
-H.264 are outside this first-version scope. No 1080p/30 FPS performance is claimed.
+No WebRTC, HLS, ONVIF, audio, recording or LCD is included. Hardware H.264 is now
+available for compatible modes through RTP/RTSP; NVR interoperability and release
+security are not certified. No 1080p/30 FPS performance is claimed.
 
 ## Repository Origin
 

@@ -49,6 +49,21 @@ int main() {
     moved.reset();
     require(broker.stats().occupiedSlots == 0, "last reader frees slot");
 
+        const std::array<std::uint8_t, 6> h264{0, 0, 0, 1, 0x65, 0x88};
+        require(broker.publish(h264.data(), h264.size(), 101, VideoCodec::H264) == PublishResult::Published,
+            "Annex B H264 accepted explicitly");
+        auto encoded = broker.tryTake(Output::Rtsp);
+        require(encoded && encoded.codec() == VideoCodec::H264, "lease preserves H264 codec");
+        auto encodedMoved = std::move(encoded);
+        require(encodedMoved.codec() == VideoCodec::H264, "move preserves codec");
+        encodedMoved.reset();
+        broker.tryTake(Output::Http).reset();
+        broker.tryTake(Output::Usb).reset();
+        require(broker.publish(h264.data(), h264.size(), 102) == PublishResult::InvalidFrame,
+            "H264 cannot be mislabeled JPEG");
+        require(broker.publish(jpeg.data(), jpeg.size(), 102, VideoCodec::H264) == PublishResult::InvalidFrame,
+            "JPEG cannot be mislabeled H264");
+
     for (std::uint64_t timestamp = 1; timestamp <= 20; ++timestamp) {
         require(broker.publish(jpeg.data(), jpeg.size(), timestamp) == PublishResult::Published,
                 "slow HTTP cannot block publish");

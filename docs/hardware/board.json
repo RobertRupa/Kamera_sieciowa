@@ -59,6 +59,7 @@
     "candidate_sensor": "OV5647",
     "actual_sensor": "OV5647",
     "supported_profiles": [],
+    "runtime_hardware_codecs": ["jpeg", "h264"],
     "runtime_driver_modes": [
       {"width": 800, "height": 1280, "sensor_fps": 50, "format": "RAW8"},
       {"width": 800, "height": 640, "sensor_fps": 50, "format": "RAW8"},

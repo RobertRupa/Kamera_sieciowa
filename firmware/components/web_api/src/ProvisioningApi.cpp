@@ -431,7 +431,8 @@ esp_err_t ProvisioningApi::deviceStatus(httpd_req_t* request) {
         cJSON* camera = cJSON_AddObjectToObject(data, "camera");
         if (camera == nullptr || cJSON_AddNumberToObject(camera, "width", capture.width) == nullptr ||
             cJSON_AddNumberToObject(camera, "height", capture.height) == nullptr ||
-            cJSON_AddNumberToObject(camera, "fps", capture.fps) == nullptr) {
+            cJSON_AddNumberToObject(camera, "fps", capture.fps) == nullptr ||
+            cJSON_AddStringToObject(camera, "codec", camera_hub::videoCodecKey(capture.codec)) == nullptr) {
             cJSON_Delete(root);
             return error(request, "500 Internal Server Error", "response_unavailable");
         }
@@ -476,7 +477,8 @@ esp_err_t ProvisioningApi::deviceCapabilities(httpd_req_t* request) {
     const auto capture = api.cameraStream_.captureStatus();
     char* body = serializeDeviceCapabilities(api.board_, api.capabilities_,
                                               api.runtimeState(isApContext),
-                                              api.streamServer_ != nullptr && capture.running && capture.frameReceived,
+                                              api.streamServer_ != nullptr && capture.running && capture.frameReceived &&
+                                              capture.codec == camera_hub::VideoCodec::Jpeg,
                                               api.networkStream_.status().ready && capture.running && capture.frameReceived);
     if (body == nullptr) return error(request, "500 Internal Server Error", "response_unavailable");
     httpd_resp_set_type(request, "application/json");
@@ -494,18 +496,22 @@ esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
         return error(request, "403 Forbidden", "provisioning_context_required");
     if (api.streamServer_ == nullptr || !api.cameraStream_.captureStatus().running)
         return error(request, "503 Service Unavailable", "camera_stream_unavailable");
+    if (api.cameraStream_.captureStatus().codec != camera_hub::VideoCodec::Jpeg)
+        return error(request, "409 Conflict", "mjpeg_requires_jpeg_codec");
 
     httpd_resp_set_type(request, "multipart/x-mixed-replace; boundary=frame");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     api.cameraStream_.subscribeHttp();
 
     esp_err_t result = ESP_OK;
-    while (api.cameraStream_.captureStatus().running) {
+        while (api.cameraStream_.captureStatus().running &&
+            api.cameraStream_.captureStatus().codec == camera_hub::VideoCodec::Jpeg) {
         auto frame = api.cameraStream_.tryTakeHttpFrame();
         if (!frame) {
             vTaskDelay(pdMS_TO_TICKS(20));
             continue;
         }
+        if (frame.codec() != camera_hub::VideoCodec::Jpeg) continue;
 
         std::array<char, 112> partHeader{};
         const int headerSize = std::snprintf(partHeader.data(), partHeader.size(),
@@ -523,6 +529,7 @@ esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
     }
 
     api.cameraStream_.unsubscribeHttp();
+    if (api.cameraStream_.captureStatus().codec != camera_hub::VideoCodec::Jpeg) return ESP_FAIL;
     return result;
 }
 

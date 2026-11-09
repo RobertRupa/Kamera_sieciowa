@@ -40,6 +40,11 @@ constexpr bool captureModeFits(const SensorMode& mode) noexcept {
            static_cast<std::size_t>(mode.width) * mode.height * 2 <= kMaxCaptureFrameBytes;
 }
 
+constexpr bool hardwareH264ModeFits(const SensorMode& mode) noexcept {
+    return captureModeFits(mode) && mode.width >= 80 && mode.height >= 80 &&
+           mode.width <= 1920 && mode.height <= 2032 && mode.width % 16 == 0 && mode.height % 16 == 0;
+}
+
 inline bool validCameraSettings(const CameraConfiguration& configuration,
                                 const CameraSettings& settings) noexcept {
     if (settings.previewFps == 0 || settings.previewFps > 20 ||
@@ -51,8 +56,7 @@ inline bool validCameraSettings(const CameraConfiguration& configuration,
         const auto& mode = configuration.modes[index];
         if (mode.id == settings.modeId)
                 return captureModeFits(mode) && settings.previewFps <= mode.sensorFps &&
-                   (settings.codec != VideoCodec::H264 ||
-                    (mode.width >= 80 && mode.height >= 80 && mode.width <= 1920 && mode.height <= 2032));
+                   (settings.codec != VideoCodec::H264 || hardwareH264ModeFits(mode));
     }
     return false;
 }

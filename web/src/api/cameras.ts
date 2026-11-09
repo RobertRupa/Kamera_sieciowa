@@ -9,6 +9,7 @@ export const cameraInventorySchema = z.object({ data: z.object({
     sensor: z.string().min(1).max(32),
     interface: z.string().max(32),
     capturing: z.boolean(),
+    codec: z.enum(['jpeg', 'h264']).default('jpeg'),
     mjpeg_path: z.literal('/stream.mjpg').nullable(),
     mjpeg_port: z.number().int().min(1).max(65535),
     rtsp_path: z.string().regex(/^\/cameras\/[a-z0-9-]{1,32}$/).nullable(),
@@ -20,9 +21,12 @@ export const cameraSettingsSchema = z.object({
   mode_id: z.number().int().min(0).max(31),
   preview_fps: z.number().int().min(1).max(20),
   jpeg_quality: z.number().int().min(1).max(100),
+  codec: z.enum(['jpeg', 'h264']).default('jpeg'),
+  h264_bitrate: z.number().int().min(64000).max(10000000).default(2000000),
 })
 export const cameraConfigurationSchema = z.object({ data: z.object({
   persistent: z.boolean(),
+  hardware_codecs: z.array(z.enum(['jpeg', 'h264'])).max(2).default(['jpeg']),
   state: z.enum(['idle', 'queued', 'applying', 'applied', 'failed']),
   settings: cameraSettingsSchema,
   modes: z.array(z.object({
@@ -32,10 +36,12 @@ export const cameraConfigurationSchema = z.object({ data: z.object({
     height: z.number().int().min(1).max(65535),
     sensor_fps: z.number().int().min(1).max(65535),
     available: z.boolean(),
+    h264_available: z.boolean().default(false),
   })).max(32),
 }) })
 const udpSchema = z.object({ data: z.object({
   ready: z.boolean(), enabled: z.boolean(),
+  codec: z.enum(['jpeg', 'h264']).default('jpeg'),
   receiver: z.union([z.ipv4(), z.literal('')]),
   port: z.number().int().min(1024).max(65534),
   frames_sent: z.number().int().nonnegative(),

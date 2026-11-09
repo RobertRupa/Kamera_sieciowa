@@ -153,6 +153,7 @@ extern "C" void app_main() {
             streamAttempts < 3 && esp_timer_get_time() >= nextStreamAttempt) {
             ++streamAttempts;
             nextStreamAttempt = esp_timer_get_time() + 5000000;
+            networkStreams.stop();
             const auto result = networkStreams.start(address);
             if (result != ESP_OK) ESP_LOGW("camera_hub", "RTP/RTSP start failed: %s", esp_err_to_name(result));
         }

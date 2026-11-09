@@ -21,6 +21,8 @@ const selected = ref('')
 const modeId = ref(0)
 const fps = ref(20)
 const quality = ref(80)
+const codec = ref<'jpeg' | 'h264'>('jpeg')
+const bitrate = ref(2000000)
 const udpEnabled = ref(false)
 const udpPort = ref(5004)
 const username = ref('admin')
@@ -35,6 +37,11 @@ const cameras = computed(() => inventory.value?.cameras.map(camera => ({ ...came
 const modes = computed(() => configuration.value?.modes.map(mode => ({ ...mode,
   label: `${mode.width} × ${mode.height} · ${mode.sensor_fps} FPS`, disabled: !mode.available })) ?? [])
 const maxFps = computed(() => Math.min(20, modes.value.find(mode => mode.id === modeId.value)?.sensor_fps ?? 20))
+const codecOptions = computed(() => (configuration.value?.hardware_codecs ?? ['jpeg']).map(value => ({
+  value, label: t(value === 'h264' ? 'hardware_h264' : 'hardware_jpeg'),
+  disabled: value === 'h264' && !modes.value.find(mode => mode.id === modeId.value)?.h264_available,
+})))
+const compatibleCodec = computed(() => codec.value !== 'h264' || modes.value.find(mode => mode.id === modeId.value)?.h264_available)
 const sdpLink = computed(() => `${device.base}/api/v1/cameras/${selected.value}/stream.sdp`)
 
 function acceptConfiguration(value: CameraConfiguration) {
@@ -42,6 +49,8 @@ function acceptConfiguration(value: CameraConfiguration) {
   modeId.value = value.settings.mode_id
   fps.value = value.settings.preview_fps
   quality.value = value.settings.jpeg_quality
+  codec.value = value.settings.codec
+  bitrate.value = value.settings.h264_bitrate
 }
 
 async function refreshCamera() {
@@ -127,7 +136,8 @@ function apply() {
   return action(async () => {
     const current = generation
     await saveCameraConfiguration(device.base, selected.value,
-      { mode_id: modeId.value, preview_fps: fps.value, jpeg_quality: quality.value }, requireToken())
+      { mode_id: modeId.value, preview_fps: fps.value, jpeg_quality: quality.value,
+        codec: codec.value, h264_bitrate: bitrate.value }, requireToken())
     for (let attempt = 0; attempt < 40 && current === generation; ++attempt) {
       await new Promise(resolve => setTimeout(resolve, 500))
       const value = await getCameraConfiguration(device.base, selected.value)
@@ -136,6 +146,15 @@ function apply() {
       if (value.state === 'failed') throw new Error('camera_configuration_failed')
       if (value.state === 'applied') {
         acceptConfiguration(value)
+        for (let retry = 0; retry < 20 && current === generation; ++retry) {
+          const network = await getCameraUdp(device.base, selected.value)
+          if (network.ready && network.codec === value.settings.codec) break
+          if (retry === 19) throw new Error('camera_configuration_failed')
+          await new Promise(resolve => setTimeout(resolve, 200))
+        }
+        if (current !== generation) return
+        inventory.value = await getCameras(device.base)
+        await refreshCamera()
         await device.refreshStatus()
         message.value = 'camera_configuration_applied'
         return
@@ -177,12 +196,20 @@ function applyUdp() {
       <form v-if="configuration" class="camera-settings-grid" @submit.prevent="apply">
         <label for="camera-mode">{{ t('sensor_mode') }}</label>
         <Select id="camera-mode" v-model="modeId" :aria-label="t('sensor_mode')" :options="modes" option-label="label" option-value="id" option-disabled="disabled" :disabled="pending || !token" />
+        <label for="camera-codec">{{ t('hardware_codec') }}</label>
+        <Select id="camera-codec" v-model="codec" :aria-label="t('hardware_codec')" :options="codecOptions" option-label="label" option-value="value" option-disabled="disabled" :disabled="pending || !token" />
         <label for="camera-fps">{{ t('preview_fps') }}</label>
         <InputNumber input-id="camera-fps" v-model="fps" :min="1" :max="maxFps" show-buttons :disabled="pending || !token" />
-        <label for="camera-quality">{{ t('jpeg_quality') }}</label>
-        <InputNumber input-id="camera-quality" v-model="quality" :min="1" :max="100" show-buttons :disabled="pending || !token" />
+        <template v-if="codec === 'jpeg'">
+          <label for="camera-quality">{{ t('jpeg_quality') }}</label>
+          <InputNumber input-id="camera-quality" v-model="quality" :min="1" :max="100" show-buttons :disabled="pending || !token" />
+        </template>
+        <template v-else>
+          <label for="camera-bitrate">{{ t('h264_bitrate') }}</label>
+          <InputNumber input-id="camera-bitrate" v-model="bitrate" :min="64000" :max="10000000" :step="64000" :use-grouping="false" show-buttons :disabled="pending || !token" />
+        </template>
         <span>{{ t('camera_runtime_only') }}</span>
-        <Button type="submit" icon="pi pi-check" :label="t('apply_camera')" :loading="pending" :disabled="!token || !modes.some(mode => mode.id === modeId && mode.available)" />
+        <Button type="submit" icon="pi pi-check" :label="t('apply_camera')" :loading="pending" :disabled="!token || !compatibleCodec || !modes.some(mode => mode.id === modeId && mode.available)" />
       </form>
       <form v-if="udp?.ready" class="camera-settings-grid" @submit.prevent="applyUdp">
         <label for="camera-udp">RTP / UDP</label>

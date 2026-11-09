@@ -25,6 +25,7 @@
 #include "esp_video_init.h"
 #include "esp_video_ioctl.h"
 #include "driver/jpeg_encode.h"
+#include "esp_h264_enc_single_hw.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -142,6 +143,7 @@ struct CameraHardwareProbe::State {
     int cameraFd{-1};
     jpeg_encoder_handle_t jpegEncoder{nullptr};
     jpeg_encode_cfg_t jpegConfig{};
+    esp_h264_enc_handle_t h264Encoder{nullptr};
     std::uint8_t* jpegOutput{nullptr};
     std::size_t jpegOutputSize{0};
     SemaphoreHandle_t taskStopped{nullptr};
@@ -153,6 +155,7 @@ struct CameraHardwareProbe::State {
     std::mutex subscriberMutex;
     std::size_t httpSubscribers{0};
     std::atomic<bool> networkEnabled{false};
+    std::atomic<bool> keyFrameRequested{false};
     mutable std::mutex configurationMutex;
     camera_hub::CameraConfiguration configuration{};
     camera_hub::CameraSettings requestedSettings{};
@@ -189,6 +192,11 @@ void CameraHardwareProbe::releaseResources() noexcept {
     if (state.jpegOutput != nullptr) {
         free(state.jpegOutput);
         state.jpegOutput = nullptr;
+    }
+    if (state.h264Encoder != nullptr) {
+        esp_h264_enc_close(state.h264Encoder);
+        esp_h264_enc_del(state.h264Encoder);
+        state.h264Encoder = nullptr;
     }
     if (state.jpegEncoder != nullptr) {
         jpeg_del_encoder_engine(state.jpegEncoder);
@@ -456,9 +464,10 @@ void CameraHardwareProbe::captureTask() noexcept {
         }
         if (apply) {
             rollbackSettings = previous;
-            const auto result = requested.modeId == previous.modeId
-                ? ESP_OK : restartCapture(requested.modeId);
-            const bool restored = result == ESP_OK || restartCapture(previous.modeId) == ESP_OK;
+            auto result = requested.modeId == previous.modeId && requested.codec == previous.codec
+                ? ESP_OK : restartCapture(requested.modeId, requested.codec);
+            if (result == ESP_OK) result = configureEncoder(requested);
+            const bool restored = result == ESP_OK || restoreConfiguration(previous);
             {
                 const std::lock_guard<std::mutex> lock(state.configurationMutex);
                 if (result == ESP_OK) {
@@ -477,7 +486,7 @@ void CameraHardwareProbe::captureTask() noexcept {
         buffer.memory = V4L2_MEMORY_MMAP;
         if (ioctl(state.cameraFd, VIDIOC_DQBUF, &buffer) != 0) {
             if (configurationDeadline != 0 && esp_timer_get_time() >= configurationDeadline) {
-                const bool restored = restartCapture(rollbackSettings.modeId) == ESP_OK;
+                const bool restored = restoreConfiguration(rollbackSettings);
                 {
                     const std::lock_guard<std::mutex> lock(state.configurationMutex);
                     state.configuration.settings = rollbackSettings;
@@ -497,30 +506,56 @@ void CameraHardwareProbe::captureTask() noexcept {
 
         if ((buffer.flags & V4L2_BUF_FLAG_DONE) != 0 && buffer.bytesused != 0) {
             state.frameReceived.store(true);
+            bool validating = false;
+            camera_hub::VideoCodec codec{};
             {
                 const std::lock_guard<std::mutex> lock(state.configurationMutex);
-                if (state.configuration.state == camera_hub::ConfigurationState::Applying)
-                    state.configuration.state = camera_hub::ConfigurationState::Applied;
+                validating = state.configuration.state == camera_hub::ConfigurationState::Applying;
+                codec = state.configuration.settings.codec;
             }
-            configurationDeadline = 0;
             bool hasHttpSubscribers = false;
             {
                 const std::lock_guard<std::mutex> lock(state.subscriberMutex);
                 hasHttpSubscribers = state.httpSubscribers != 0;
             }
             const auto now = esp_timer_get_time();
-            if ((hasHttpSubscribers || state.networkEnabled.load()) &&
+            if ((validating || (hasHttpSubscribers && codec == camera_hub::VideoCodec::Jpeg) || state.networkEnabled.load()) &&
                 now - lastEncodeUs >= 1000000 / state.fps) {
                 std::uint32_t jpegSize = 0;
                 const auto* source = static_cast<const std::uint8_t*>(
                     state.captureBuffers[buffer.index].address);
-                const auto encodeResult = jpeg_encoder_process(
-                    state.jpegEncoder, &state.jpegConfig, source,
-                    static_cast<std::uint32_t>(state.captureBufferSize),
-                    state.jpegOutput, static_cast<std::uint32_t>(state.jpegOutputSize), &jpegSize);
+                esp_err_t encodeResult = ESP_FAIL;
+                if (codec == camera_hub::VideoCodec::Jpeg) {
+                    encodeResult = jpeg_encoder_process(
+                        state.jpegEncoder, &state.jpegConfig, source,
+                        static_cast<std::uint32_t>(state.captureBufferSize),
+                        state.jpegOutput, static_cast<std::uint32_t>(state.jpegOutputSize), &jpegSize);
+                } else if (state.h264Encoder != nullptr) {
+                    if (state.keyFrameRequested.exchange(false)) {
+                        esp_h264_enc_param_hw_handle_t parameters = nullptr;
+                        if (esp_h264_enc_hw_get_param_hd(state.h264Encoder, &parameters) == ESP_H264_ERR_OK)
+                            static_cast<void>(esp_h264_enc_force_idr(&parameters->base));
+                    }
+                    esp_h264_enc_in_frame_t input{};
+                    input.raw_data.buffer = const_cast<std::uint8_t*>(source);
+                    input.raw_data.len = state.captureBufferSize;
+                    esp_h264_enc_out_frame_t output{};
+                    output.raw_data.buffer = state.jpegOutput;
+                    output.raw_data.len = state.jpegOutputSize;
+                    const auto result = esp_h264_enc_process(state.h264Encoder, &input, &output);
+                    if (result == ESP_H264_ERR_OK && output.length != 0 && output.length <= state.jpegOutputSize) {
+                        jpegSize = output.length;
+                        encodeResult = ESP_OK;
+                    }
+                }
                 if (encodeResult == ESP_OK) {
                     const auto published = state.broker->publish(state.jpegOutput, jpegSize,
-                                                                 static_cast<std::uint64_t>(now));
+                                                                 static_cast<std::uint64_t>(now), codec);
+                    if (validating && published == camera_hub::PublishResult::Published) {
+                        const std::lock_guard<std::mutex> lock(state.configurationMutex);
+                        state.configuration.state = camera_hub::ConfigurationState::Applied;
+                        configurationDeadline = 0;
+                    }
                     if (published != camera_hub::PublishResult::Published &&
                         published != camera_hub::PublishResult::PoolExhausted &&
                         !state.publishErrorLogged.exchange(true)) {
@@ -528,12 +563,18 @@ void CameraHardwareProbe::captureTask() noexcept {
                                  static_cast<unsigned int>(published), static_cast<unsigned long>(jpegSize));
                     }
                 } else if (!state.encoderErrorLogged.exchange(true)) {
-                    ESP_LOGW(kTag, "JPEG encode failed: %s input=%lu output=%lu",
+                    ESP_LOGW(kTag, "hardware encode failed: %s input=%lu output=%lu",
                              esp_err_to_name(encodeResult),
                              static_cast<unsigned long>(state.captureBufferSize),
                              static_cast<unsigned long>(state.jpegOutputSize));
                 }
                 lastEncodeUs = now;
+                if (validating && encodeResult != ESP_OK) {
+                    const bool restored = restoreConfiguration(rollbackSettings);
+                    configurationDeadline = 0;
+                    if (!restored) break;
+                    continue;
+                }
             }
         }
         if (ioctl(state.cameraFd, VIDIOC_QBUF, &buffer) != 0) {
@@ -573,6 +614,7 @@ CameraCaptureStatus CameraHardwareProbe::captureStatus() const noexcept {
     status.width = state_->width;
     status.height = state_->height;
     status.fps = state_->fps;
+    status.codec = state_->configuration.settings.codec;
     return status;
 }
 
@@ -594,7 +636,7 @@ esp_err_t CameraHardwareProbe::requestConfiguration(const camera_hub::CameraSett
     return ESP_OK;
 }
 
-esp_err_t CameraHardwareProbe::restartCapture(std::uint32_t modeId) noexcept {
+esp_err_t CameraHardwareProbe::restartCapture(std::uint32_t modeId, camera_hub::VideoCodec codec) noexcept {
     auto& state = *state_;
     const auto type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     state.frameReceived.store(false);
@@ -617,9 +659,10 @@ esp_err_t CameraHardwareProbe::restartCapture(std::uint32_t modeId) noexcept {
     v4l2_format format{};
     format.type = type;
     if (ioctl(state.cameraFd, VIDIOC_G_FMT, &format) != 0) return ESP_FAIL;
-    format.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB565;
+    const auto pixelFormat = codec == camera_hub::VideoCodec::H264 ? V4L2_PIX_FMT_YUV420 : V4L2_PIX_FMT_RGB565;
+    format.fmt.pix.pixelformat = pixelFormat;
     if (ioctl(state.cameraFd, VIDIOC_S_FMT, &format) != 0 ||
-        format.fmt.pix.pixelformat != V4L2_PIX_FMT_RGB565) return ESP_FAIL;
+        format.fmt.pix.pixelformat != pixelFormat) return ESP_FAIL;
     request.count = kBufferCount;
     if (ioctl(state.cameraFd, VIDIOC_REQBUFS, &request) != 0) return ESP_FAIL;
     state.captureBufferSize = 0;
@@ -683,9 +726,53 @@ void CameraHardwareProbe::setNetworkEnabled(bool enabled) noexcept {
     state_->networkEnabled.store(enabled);
 }
 
+void CameraHardwareProbe::requestKeyFrame() noexcept {
+    if (state_ != nullptr) state_->keyFrameRequested.store(true);
+}
+
 camera_hub::FrameLease CameraHardwareProbe::tryTakeNetworkFrame() noexcept {
-    return state_ == nullptr || state_->broker == nullptr
-    ? camera_hub::FrameLease{} : state_->broker->tryTakeLatest(camera_hub::Output::Rtsp);
+    if (state_ == nullptr || state_->broker == nullptr) return {};
+    return configuration().settings.codec == camera_hub::VideoCodec::H264
+        ? state_->broker->tryTake(camera_hub::Output::Rtsp)
+        : state_->broker->tryTakeLatest(camera_hub::Output::Rtsp);
+}
+
+esp_err_t CameraHardwareProbe::configureEncoder(const camera_hub::CameraSettings& settings) noexcept {
+    auto& state = *state_;
+    if (state.h264Encoder != nullptr) {
+        esp_h264_enc_close(state.h264Encoder);
+        esp_h264_enc_del(state.h264Encoder);
+        state.h264Encoder = nullptr;
+    }
+    if (settings.codec == camera_hub::VideoCodec::Jpeg) return ESP_OK;
+    esp_h264_enc_cfg_hw_t config{};
+    config.pic_type = ESP_H264_RAW_FMT_O_UYY_E_VYY;
+    config.res.width = state.width;
+    config.res.height = state.height;
+    config.fps = settings.previewFps;
+    config.gop = settings.previewFps;
+    config.rc.bitrate = settings.h264Bitrate;
+    config.rc.qp_min = 20;
+    config.rc.qp_max = 40;
+    if (esp_h264_enc_hw_new(&config, &state.h264Encoder) != ESP_H264_ERR_OK ||
+        esp_h264_enc_open(state.h264Encoder) != ESP_H264_ERR_OK) {
+        if (state.h264Encoder != nullptr) {
+            esp_h264_enc_del(state.h264Encoder);
+            state.h264Encoder = nullptr;
+        }
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+bool CameraHardwareProbe::restoreConfiguration(const camera_hub::CameraSettings& settings) noexcept {
+    const bool restored = restartCapture(settings.modeId, settings.codec) == ESP_OK && configureEncoder(settings) == ESP_OK;
+    const std::lock_guard<std::mutex> lock(state_->configurationMutex);
+    state_->configuration.settings = settings;
+    state_->configuration.state = camera_hub::ConfigurationState::Failed;
+    state_->jpegConfig.image_quality = settings.jpegQuality;
+    state_->fps = settings.previewFps;
+    return restored;
 }
 
 camera_hub::CameraProbeResult CameraHardwareProbe::run() const noexcept {

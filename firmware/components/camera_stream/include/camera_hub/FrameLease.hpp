@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include "camera_hub/VideoCodec.hpp"
 
 namespace camera_hub {
 
@@ -20,17 +21,19 @@ public:
     [[nodiscard]] const std::uint8_t* data() const noexcept;
     [[nodiscard]] std::size_t size() const noexcept;
     [[nodiscard]] std::uint64_t timestampUs() const noexcept;
+    [[nodiscard]] VideoCodec codec() const noexcept;
     void reset() noexcept;
 
 private:
     friend class FrameBroker;
     FrameLease(FrameBroker& broker, std::size_t slot, const std::uint8_t* data,
-               std::size_t size, std::uint64_t timestampUs) noexcept;
+               std::size_t size, std::uint64_t timestampUs, VideoCodec codec) noexcept;
     FrameBroker* broker_{nullptr};
     std::size_t slot_{0};
     const std::uint8_t* data_{nullptr};
     std::size_t size_{0};
     std::uint64_t timestampUs_{0};
+    VideoCodec codec_{VideoCodec::Jpeg};
 };
 
 }

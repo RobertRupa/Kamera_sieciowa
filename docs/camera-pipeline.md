@@ -10,7 +10,7 @@ over-budget output is rejected. The caller keeps storage and broker alive until
 all leases and producer/consumer tasks are stopped. Never destroy the broker
 while a lease exists.
 
-One producer calls `publish()` with a complete, borrowed JPEG buffer and a
+One producer calls `publish()` with a complete, borrowed encoded frame buffer and a
 monotonic microsecond timestamp. The buffer must be readable for its declared
 length and remain unchanged until `publish()` returns. Publication copies once
 into a reserved slot outside the metadata lock. The producer may then return the
@@ -106,3 +106,22 @@ Mode enumeration and resource validation are separate from physical board readin
 All five upstream OV5647 formats are enabled, including RAW10 and portrait.
 Capture buffers allow at most 5 MiB each and dimensions up to 1920 per axis;
 the 32 MiB PSRAM profile is required. The default 800x800 mode is preserved.
+
+## Hardware Codec Ownership
+
+The capture task owns either hardware JPEG (RGB565 input) or hardware H.264
+(native ISP packed YUV420 input). H.264 uses `esp_h264_enc_hw_new` only; no
+software encoder fallback is linked by this adapter. Configuration recreates the
+encoder and capture format when needed and requires a valid encoded frame before
+Applied. It attempts rollback on failure. No spatial resize/rotation/crop is
+introduced. H.264 input dimensions must be multiples of 16 in this integration;
+1920x1080 therefore remains JPEG-only rather than silently padding/changing it.
+
+Slots and move-only leases carry `VideoCodec`. JPEG publication validates its
+envelope; H.264 publication validates Annex-B start codes, not a full H.264 parse.
+HTTP consumes JPEG only. The network task recreates its RTSP server/packetizer on
+a codec change, disables old direct UDP, and uses payload 26 for JPEG or 96 for
+H.264 (RFC 6184). It waits for IDR when a new H.264 receiver starts; the request
+is an atomic flag serviced by the capture task. H.264 consumes the bounded FIFO
+to avoid deliberately dropping dependent frames, rather than JPEG's latest-only
+selection. Periodic hardware IDRs permit recovery after unavoidable packet loss.

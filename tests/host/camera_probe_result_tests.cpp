@@ -62,6 +62,11 @@ int main() {
     settings.h264Bitrate = 10000001;
     assert(!validCameraSettings(configuration, settings));
     settings.h264Bitrate = 2000000;
+    configuration.modes[0].width = 1920;
+    configuration.modes[0].height = 1080;
+    assert(!validCameraSettings(configuration, settings));
+    configuration.modes[0].width = 800;
+    configuration.modes[0].height = 800;
     configuration.modes[0].width = 64;
     assert(!validCameraSettings(configuration, settings));
     settings.codec = VideoCodec::Jpeg;

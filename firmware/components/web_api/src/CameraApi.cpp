@@ -186,10 +186,13 @@ esp_err_t CameraApi::inventory(httpd_req_t* request) {
             cJSON_AddStringToObject(camera, "sensor", sensor) != nullptr &&
             cJSON_AddStringToObject(camera, "interface", "MIPI-CSI") != nullptr &&
             cJSON_AddBoolToObject(camera, "capturing", capture.running && capture.frameReceived) != nullptr &&
-            cJSON_AddStringToObject(camera, "mjpeg_path", "/stream.mjpg") != nullptr;
+            cJSON_AddStringToObject(camera, "codec", camera_hub::videoCodecKey(capture.codec)) != nullptr &&
+            (capture.codec == camera_hub::VideoCodec::Jpeg
+                ? cJSON_AddStringToObject(camera, "mjpeg_path", "/stream.mjpg")
+                : cJSON_AddNullToObject(camera, "mjpeg_path")) != nullptr;
         valid = valid && cJSON_AddNumberToObject(camera, "mjpeg_port", 81) != nullptr &&
             cJSON_AddNumberToObject(camera, "rtsp_port", 8554) != nullptr &&
-            (streams.ready && capture.running && capture.frameReceived
+            (streams.ready && streams.codec == capture.codec && capture.running && capture.frameReceived
                 ? cJSON_AddStringToObject(camera, "rtsp_path", "/cameras/csi-0")
                 : cJSON_AddNullToObject(camera, "rtsp_path")) != nullptr;
         if (camera != nullptr && !cJSON_AddItemToArray(cameras, camera)) {
@@ -206,13 +209,21 @@ esp_err_t CameraApi::configuration(httpd_req_t* request) {
         cJSON* mode = cJSON_GetObjectItemCaseSensitive(root, "mode_id");
         cJSON* fps = cJSON_GetObjectItemCaseSensitive(root, "preview_fps");
         cJSON* quality = cJSON_GetObjectItemCaseSensitive(root, "jpeg_quality");
-        const bool valid = root != nullptr && cJSON_GetArraySize(root) == 3 &&
-            integer(mode, 0, 31) && integer(fps, 1, 20) && integer(quality, 1, 100);
-        camera_hub::CameraSettings settings{};
+        cJSON* codec = cJSON_GetObjectItemCaseSensitive(root, "codec");
+        cJSON* bitrate = cJSON_GetObjectItemCaseSensitive(root, "h264_bitrate");
+        const bool validCodec = codec == nullptr || (cJSON_IsString(codec) &&
+            (std::strcmp(codec->valuestring, "jpeg") == 0 || std::strcmp(codec->valuestring, "h264") == 0));
+        const bool valid = root != nullptr && cJSON_GetArraySize(root) == 3 + (codec != nullptr) + (bitrate != nullptr) &&
+            integer(mode, 0, 31) && integer(fps, 1, 20) && integer(quality, 1, 100) && validCodec &&
+            (bitrate == nullptr || integer(bitrate, 64000, 10000000));
+        auto settings = camera_.configuration().settings;
         if (valid) {
             settings.modeId = static_cast<std::uint32_t>(mode->valuedouble);
             settings.previewFps = static_cast<std::uint8_t>(fps->valuedouble);
             settings.jpegQuality = static_cast<std::uint8_t>(quality->valuedouble);
+            if (codec != nullptr) settings.codec = std::strcmp(codec->valuestring, "h264") == 0
+                ? camera_hub::VideoCodec::H264 : camera_hub::VideoCodec::Jpeg;
+            if (bitrate != nullptr) settings.h264Bitrate = static_cast<std::uint32_t>(bitrate->valuedouble);
         }
         cJSON_Delete(root);
         if (!valid) return failure(request, "400 Bad Request", "invalid_camera_configuration");
@@ -232,7 +243,14 @@ esp_err_t CameraApi::configuration(httpd_req_t* request) {
         cJSON_AddStringToObject(data, "state", configurationState(configuration.state)) != nullptr &&
         cJSON_AddNumberToObject(settings, "mode_id", configuration.settings.modeId) != nullptr &&
         cJSON_AddNumberToObject(settings, "preview_fps", configuration.settings.previewFps) != nullptr &&
-        cJSON_AddNumberToObject(settings, "jpeg_quality", configuration.settings.jpegQuality) != nullptr;
+        cJSON_AddNumberToObject(settings, "jpeg_quality", configuration.settings.jpegQuality) != nullptr &&
+        cJSON_AddStringToObject(settings, "codec", camera_hub::videoCodecKey(configuration.settings.codec)) != nullptr &&
+        cJSON_AddNumberToObject(settings, "h264_bitrate", configuration.settings.h264Bitrate) != nullptr;
+    cJSON* codecs = cJSON_AddArrayToObject(data, "hardware_codecs");
+    cJSON* jpeg = cJSON_CreateString("jpeg");
+    cJSON* h264 = cJSON_CreateString("h264");
+    if (!cJSON_AddItemToArray(codecs, jpeg)) { cJSON_Delete(jpeg); valid = false; }
+    if (!cJSON_AddItemToArray(codecs, h264)) { cJSON_Delete(h264); valid = false; }
     for (std::size_t index = 0; index < configuration.modeCount; ++index) {
         const auto& mode = configuration.modes[index];
         cJSON* entry = cJSON_CreateObject();
@@ -241,7 +259,8 @@ esp_err_t CameraApi::configuration(httpd_req_t* request) {
             cJSON_AddNumberToObject(entry, "width", mode.width) != nullptr &&
             cJSON_AddNumberToObject(entry, "height", mode.height) != nullptr &&
             cJSON_AddNumberToObject(entry, "sensor_fps", mode.sensorFps) != nullptr &&
-            cJSON_AddBoolToObject(entry, "available", camera_hub::captureModeFits(mode)) != nullptr;
+            cJSON_AddBoolToObject(entry, "available", camera_hub::captureModeFits(mode)) != nullptr &&
+            cJSON_AddBoolToObject(entry, "h264_available", camera_hub::hardwareH264ModeFits(mode)) != nullptr;
         if (entry != nullptr && !cJSON_AddItemToArray(modes, entry)) {
             cJSON_Delete(entry);
             valid = false;
@@ -271,6 +290,7 @@ esp_err_t CameraApi::udp(httpd_req_t* request, std::uint32_t peer) {
     cJSON* data = cJSON_AddObjectToObject(root, "data");
     const bool valid = root != nullptr && data != nullptr &&
         cJSON_AddBoolToObject(data, "ready", status.ready) != nullptr &&
+        cJSON_AddStringToObject(data, "codec", camera_hub::videoCodecKey(status.codec)) != nullptr &&
         cJSON_AddBoolToObject(data, "enabled", status.directEnabled) != nullptr &&
         cJSON_AddNumberToObject(data, "port", status.port) != nullptr &&
         cJSON_AddStringToObject(data, "receiver", receiver.data()) != nullptr &&
@@ -295,8 +315,12 @@ esp_err_t CameraApi::sdp(httpd_req_t* request, std::uint32_t peer) {
     std::array<char, 384> body{};
     std::snprintf(body.data(), body.size(),
                   "v=0\r\no=- 0 0 IN IP4 %s\r\ns=Camera csi-0\r\nc=IN IP4 %s\r\nt=0 0\r\n"
-                  "m=video %u RTP/AVP 26\r\na=rtpmap:26 JPEG/90000\r\na=recvonly\r\n",
-                  receiver.data(), receiver.data(), static_cast<unsigned int>(status.port));
+                  "m=video %u RTP/AVP %u\r\na=rtpmap:%u %s/90000\r\n%sa=recvonly\r\n",
+                  receiver.data(), receiver.data(), static_cast<unsigned int>(status.port),
+                  status.codec == camera_hub::VideoCodec::H264 ? 96U : 26U,
+                  status.codec == camera_hub::VideoCodec::H264 ? 96U : 26U,
+                  status.codec == camera_hub::VideoCodec::H264 ? "H264" : "JPEG",
+                  status.codec == camera_hub::VideoCodec::H264 ? "a=fmtp:96 packetization-mode=1\r\n" : "");
     httpd_resp_set_type(request, "application/sdp");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     httpd_resp_set_hdr(request, "Content-Disposition", "attachment; filename=csi-0.sdp");

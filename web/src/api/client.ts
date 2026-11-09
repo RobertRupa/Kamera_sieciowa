@@ -20,7 +20,7 @@ export const statusSchema = z.object({ data: z.object({
   firmware_version: z.string().max(100),
   uptime_seconds: z.number().nonnegative(),
   free_heap_bytes: z.number().nonnegative(),
-  camera: z.object({ width: z.number().int().nonnegative(), height: z.number().int().nonnegative(), fps: z.number().nonnegative() }).nullable(),
+  camera: z.object({ width: z.number().int().nonnegative(), height: z.number().int().nonnegative(), fps: z.number().nonnegative(), codec: z.enum(['jpeg', 'h264']).optional() }).nullable(),
   camera_probe_state: z.enum(['not_run', 'no_supported_sensor', 'sensor_identified', 'frame_captured', 'capture_failed', 'error']).optional(),
   camera_hardware: z.object({
     sensor: z.string().min(1).max(32).nullable(),

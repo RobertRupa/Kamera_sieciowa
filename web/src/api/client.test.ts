@@ -21,7 +21,7 @@ describe('device boundary', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(pl).sort())
   })
   it('rejects invalid camera settings', () => {
-    expect(cameraSettingsSchema.parse({ mode_id: 0, preview_fps: 20, jpeg_quality: 80 })).toEqual({ mode_id: 0, preview_fps: 20, jpeg_quality: 80 })
+    expect(cameraSettingsSchema.parse({ mode_id: 0, preview_fps: 20, jpeg_quality: 80 })).toEqual({ mode_id: 0, preview_fps: 20, jpeg_quality: 80, codec: 'jpeg', h264_bitrate: 2000000 })
     for (const settings of [
       { mode_id: -1, preview_fps: 20, jpeg_quality: 80 },
       { mode_id: 0, preview_fps: 21, jpeg_quality: 80 },
@@ -30,6 +30,7 @@ describe('device boundary', () => {
   })
   it('builds camera stream links only for active advertised streams', () => {
     const camera = { id: 'csi-0', sensor: 'OV5647', interface: 'MIPI-CSI', capturing: true,
+      codec: 'jpeg' as const,
       mjpeg_path: '/stream.mjpg' as const, mjpeg_port: 81,
       rtsp_path: '/cameras/csi-0', rtsp_port: 8554 }
     expect(cameraStreamLink('http://192.168.1.2', camera, 'rtsp')).toBe('rtsp://192.168.1.2:8554/cameras/csi-0')
@@ -38,6 +39,13 @@ describe('device boundary', () => {
     expect(cameraStreamLink('http://192.168.1.2', { ...camera, rtsp_path: null }, 'rtsp')).toBe('')
     expect(() => cameraInventorySchema.parse({ data: { simultaneous_csi_inputs: 1, development_login: false,
       cameras: [{ ...camera, rtsp_path: '//external.example/stream' }] } })).toThrow()
+  })
+  it('accepts hardware H264 with a bounded bitrate, not arbitrary codec names', () => {
+    expect(cameraSettingsSchema.parse({ mode_id: 0, preview_fps: 20, jpeg_quality: 80,
+      codec: 'h264', h264_bitrate: 1000000 }).codec).toBe('h264')
+    for (const change of [{ codec: 'h265' }, { h264_bitrate: 63999 }, { h264_bitrate: 10000001 }]) {
+      expect(() => cameraSettingsSchema.parse({ mode_id: 0, preview_fps: 20, jpeg_quality: 80, ...change })).toThrow()
+    }
   })
   it('keeps camera hardware unknown for legacy status responses', () => {
     const status = statusSchema.parse({ data: {

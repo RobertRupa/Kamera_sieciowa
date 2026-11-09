@@ -7,6 +7,7 @@ namespace camera_stream {
 
 struct NetworkStreamStatus {
     bool ready{false};
+    camera_hub::VideoCodec codec{camera_hub::VideoCodec::Jpeg};
     bool directEnabled{false};
     std::uint32_t receiver{0};
     std::uint16_t port{5004};
@@ -35,6 +36,7 @@ public:
 private:
     static void taskEntry(void* context);
     void run() noexcept;
+    [[nodiscard]] bool configureServer(camera_hub::VideoCodec codec) noexcept;
     CameraHardwareProbe& camera_;
     struct State;
     State* state_{nullptr};

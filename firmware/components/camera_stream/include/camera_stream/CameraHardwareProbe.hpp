@@ -14,6 +14,7 @@ struct CameraCaptureStatus {
     std::uint16_t width{0};
     std::uint16_t height{0};
     std::uint8_t fps{0};
+    camera_hub::VideoCodec codec{camera_hub::VideoCodec::Jpeg};
 };
 
 class CameraHardwareProbe final {
@@ -33,13 +34,16 @@ public:
     void unsubscribeHttp() noexcept;
     [[nodiscard]] camera_hub::FrameLease tryTakeHttpFrame() noexcept;
     void setNetworkEnabled(bool enabled) noexcept;
+    void requestKeyFrame() noexcept;
     [[nodiscard]] camera_hub::FrameLease tryTakeNetworkFrame() noexcept;
 
 private:
     static void captureTaskEntry(void* context);
     void captureTask() noexcept;
     void releaseResources() noexcept;
-    [[nodiscard]] esp_err_t restartCapture(std::uint32_t modeId) noexcept;
+    [[nodiscard]] esp_err_t restartCapture(std::uint32_t modeId, camera_hub::VideoCodec codec) noexcept;
+    [[nodiscard]] esp_err_t configureEncoder(const camera_hub::CameraSettings& settings) noexcept;
+    [[nodiscard]] bool restoreConfiguration(const camera_hub::CameraSettings& settings) noexcept;
 
     struct State;
     State* state_{nullptr};

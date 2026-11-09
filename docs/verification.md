@@ -1,4 +1,49 @@
 # Verification
+## Hardware JPEG and H.264 Selection
+
+2026-11-09: added runtime `codec` (`jpeg`/`h264`) and H.264 target bitrate
+64,000..10,000,000 bit/s through the authenticated camera configuration API and
+WebGUI. JPEG uses P4 hardware JPEG from RGB565; H.264 uses only the hardware
+`esp_h264_enc_hw_new` API with native ISP packed YUV420. No software H.264 fallback,
+spatial resize, rotation, mirroring or crop was added to the capture-to-stream path.
+
+PASS: ESP-IDF 6.1/P4 incremental build and flash to `/dev/ttyACM0`, final image
+`0x1e5670` bytes with 76% application-partition free. Intrinsic image checks passed;
+no erase, eFuse, partition or Wi-Fi credential change was performed.
+
+PASS: FFmpeg decoded three actual H.264 frames over RTSP/UDP in each eligible
+native mode: 800x1280, 800x640, 800x800 and 1280x960. Final receiver-start tests
+with capture-task IDR requests logged no decode errors for those RTSP runs.
+The test profiles used 10 FPS and a 1,000,000 bit/s target, not a measured guarantee
+of delivered FPS/bitrate. No geometry modification was needed.
+
+PASS WITH STARTUP WAIT: direct H.264 RTP/SDP decoded three 800x800 frames. Its
+receiver can miss the first IDR sent before it opens and reported missing PPS
+until a periodic SPS/PPS/IDR arrived. This is not a zero-startup-delay or
+loss-free transport claim. SDP uses H264/90000, payload 96 and packetization mode
+1; the maintained RFC 6184 packetizer handles NAL/FU-A fragmentation.
+
+PASS: unauthorized codec PATCH returned 401, unknown codec and incompatible
+H.264 1920x1080 request returned 400. Under H.264 the status reported the codec,
+inventory hid MJPEG, and port-81 MJPEG returned 409. Codec change stops direct
+UDP and recreates RTSP sessions. Hardware JPEG was restored and three MJPEG
+800x800 frames decoded without error. The original JPEG / 20 FPS / quality 80
+profile and default H.264 bitrate 2,000,000 were restored; direct UDP disabled.
+
+PASS: CTest 9/9 (including codec-tagged lease ownership and hardware restrictions),
+frontend typecheck, Vitest 18/18 and Playwright 27/27. The responsive browser
+scenario selects H.264, writes bitrate with the token, checks applied state and
+codec-correct links, and confirms MJPEG is not offered under H.264. The actual
+embedded page rendered both hardware-codec options and correct compatibility;
+automation of selection in the shared integrated-browser tab did not finish, so
+an additional live GUI write is NOT claimed beyond fixtures and physical API tests.
+
+LIMITS: H.264 requires both native dimensions divisible by 16 in this integration;
+1920x1080 stays JPEG-only rather than silently allocating padded geometry.
+The requested 5 MP/15, VGA/90 and QVGA/120 sensor modes are still not implemented.
+Hardware bitrate accuracy, high-FPS delivery, long-duration endurance, all encoder
+failure/rollback faults, NVR interoperability and release security remain unverified.
+
 ## All OV5647 Modes and Lower-Latency UDP
 
 2026-11-09: enabled all five modes in resolved esp_cam_sensor 2.6.0 without

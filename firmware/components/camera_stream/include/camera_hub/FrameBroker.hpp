@@ -34,7 +34,7 @@ public:
     [[nodiscard]] bool valid() const noexcept;
     void setEnabled(Output output, bool enabled) noexcept;
     [[nodiscard]] PublishResult publish(const std::uint8_t* jpeg, std::size_t size,
-                                        std::uint64_t timestampUs) noexcept;
+                                        std::uint64_t timestampUs, VideoCodec codec = VideoCodec::Jpeg) noexcept;
     [[nodiscard]] FrameLease tryTake(Output output) noexcept;
     [[nodiscard]] FrameLease tryTakeLatest(Output output) noexcept;
     [[nodiscard]] StreamStats stats() const noexcept;
@@ -45,6 +45,7 @@ private:
         std::size_t references{0};
         std::size_t size{0};
         std::uint64_t timestampUs{0};
+        VideoCodec codec{VideoCodec::Jpeg};
     };
     struct Queue {
         bool enabled{false};

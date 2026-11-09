@@ -36,15 +36,18 @@ void FrameBroker::setEnabled(Output output, bool enabled) noexcept {
 }
 
 PublishResult FrameBroker::publish(const std::uint8_t* jpeg, std::size_t size,
-                                   std::uint64_t timestampUs) noexcept {
+                                   std::uint64_t timestampUs, VideoCodec codec) noexcept {
     if (!valid_ || jpeg == nullptr || size < 4) {
         return PublishResult::InvalidFrame;
     }
     if (size > maxFrameBytes_) {
         return PublishResult::TooLarge;
     }
-    if (jpeg[0] != 0xff || jpeg[1] != 0xd8 ||
-        jpeg[size - 2] != 0xff || jpeg[size - 1] != 0xd9) {
+    const bool validJpeg = codec == VideoCodec::Jpeg && jpeg[0] == 0xff && jpeg[1] == 0xd8 &&
+        jpeg[size - 2] == 0xff && jpeg[size - 1] == 0xd9;
+    const bool validH264 = codec == VideoCodec::H264 && jpeg[0] == 0 && jpeg[1] == 0 &&
+        (jpeg[2] == 1 || (jpeg[2] == 0 && jpeg[3] == 1));
+    if (!validJpeg && !validH264) {
         return PublishResult::InvalidFrame;
     }
     std::size_t selected = slotCount;
@@ -66,6 +69,7 @@ PublishResult FrameBroker::publish(const std::uint8_t* jpeg, std::size_t size,
     std::memcpy(storage_ + selected * maxFrameBytes_, jpeg, size);
     slot.size = size;
     slot.timestampUs = timestampUs;
+    slot.codec = codec;
     {
         const std::lock_guard<std::mutex> lock(mutex_);
         for (std::size_t index = 0; index < outputCount; ++index) {
@@ -116,7 +120,7 @@ FrameLease FrameBroker::take(Output output, bool latest) noexcept {
     ++slots_[selected].references;
     dropFront(queue);
     return FrameLease(*this, selected, storage_ + selected * maxFrameBytes_,
-                      slot.size, slot.timestampUs);
+                      slot.size, slot.timestampUs, slot.codec);
 }
 
 void FrameBroker::release(std::size_t slot) noexcept {

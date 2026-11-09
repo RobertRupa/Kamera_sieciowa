@@ -6,7 +6,8 @@ set(STREAM_COMPONENT "${CMAKE_CURRENT_LIST_DIR}/../../firmware/components/camera
 add_executable(frame_broker_tests frame_broker_tests.cpp
     "${STREAM_COMPONENT}/src/FrameBroker.cpp"
     "${STREAM_COMPONENT}/src/FrameLease.cpp")
-target_include_directories(frame_broker_tests PRIVATE "${STREAM_COMPONENT}/include")
+target_include_directories(frame_broker_tests PRIVATE "${STREAM_COMPONENT}/include"
+    "${CMAKE_CURRENT_LIST_DIR}/../../firmware/components/camera_domain/include")
 target_compile_features(frame_broker_tests PRIVATE cxx_std_17)
 target_link_libraries(frame_broker_tests PRIVATE Threads::Threads)
 add_test(NAME frame_broker COMMAND frame_broker_tests)

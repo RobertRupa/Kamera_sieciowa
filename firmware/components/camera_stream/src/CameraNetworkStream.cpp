@@ -20,6 +20,7 @@
 #include "freertos/task.h"
 #include "lwip/sockets.h"
 #include "rtsp_server.hpp"
+#include "h264_packetizer.hpp"
 #include "sdkconfig.h"
 
 namespace camera_stream {
@@ -28,6 +29,22 @@ namespace {
 constexpr std::size_t kMaxRtpFrameBytes = 256 * 1024;
 constexpr std::size_t kScanBytesPerPacket = 1000;
 constexpr std::uint64_t kMaxFrameAgeUs = 100000;
+
+class HardwareH264Packetizer final : public espp::H264Packetizer {
+public:
+    HardwareH264Packetizer() : espp::H264Packetizer([] {
+        Config config{};
+        config.max_payload_size = 1200;
+        config.payload_type = 96;
+        return config;
+    }()) {}
+
+    static bool hasIdr(std::span<const std::uint8_t> frame) {
+        for (const auto nal : parse_annex_b(frame))
+            if (!nal.empty() && (nal.front() & 0x1f) == 5) return true;
+        return false;
+    }
+};
 
 class ScanPacketizer final : public espp::RtpPacketizer {
 public:
@@ -76,7 +93,9 @@ struct CameraNetworkStream::State {
     NetworkStreamStatus status{};
     std::atomic<bool> running{false};
     std::unique_ptr<espp::RtspServer> server;
-    std::shared_ptr<ScanPacketizer> packetizer;
+    std::shared_ptr<espp::RtpPacketizer> packetizer;
+    std::array<char, 16> address{};
+    camera_hub::VideoCodec activeCodec{camera_hub::VideoCodec::Jpeg};
     TaskHandle_t task{nullptr};
     SemaphoreHandle_t stopped{nullptr};
     int udp{-1};
@@ -99,21 +118,8 @@ esp_err_t CameraNetworkStream::start(std::uint32_t address) noexcept {
     auto& state = *state_;
     if (state.running.load() || state.task != nullptr || address == 0 ||
         !camera_.captureStatus().running) return ESP_ERR_INVALID_STATE;
-    std::array<char, 16> text{};
-    if (inet_ntop(AF_INET, &address, text.data(), text.size()) == nullptr) return ESP_ERR_INVALID_ARG;
-    espp::RtspServer::Config config{};
-    config.server_address = text.data();
-    config.port = 8554;
-    config.path = "cameras/csi-0";
-    config.max_data_size = 1200;
-    state.server.reset(new (std::nothrow) espp::RtspServer(config));
-    if (!state.server) return ESP_ERR_NO_MEM;
-    state.packetizer = std::make_shared<ScanPacketizer>();
-    state.server->add_track({.track_id = 0, .packetizer = state.packetizer});
-    if (!state.server->start(std::chrono::milliseconds(100))) {
-        state.server.reset();
-        return ESP_FAIL;
-    }
+    if (inet_ntop(AF_INET, &address, state.address.data(), state.address.size()) == nullptr) return ESP_ERR_INVALID_ARG;
+    if (!configureServer(camera_.captureStatus().codec)) return ESP_FAIL;
     state.udp = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (state.udp < 0 || fcntl(state.udp, F_SETFL, O_NONBLOCK) < 0) {
         if (state.udp >= 0) close(state.udp);
@@ -193,7 +199,12 @@ void CameraNetworkStream::run() noexcept {
     std::uint16_t sequence = static_cast<std::uint16_t>(esp_random());
     const auto ssrc = esp_random();
     bool subscribed = false;
+    bool previousRtsp = false;
+    bool previousDirect = false;
+    bool waitingForIdr = false;
     while (state.running.load()) {
+        const auto codec = camera_.captureStatus().codec;
+        if (codec != state.activeCodec && !configureServer(codec)) break;
         NetworkStreamStatus snapshot{};
         {
             const std::lock_guard<std::mutex> lock(state.mutex);
@@ -201,10 +212,18 @@ void CameraNetworkStream::run() noexcept {
             snapshot = state.status;
         }
         const bool rtspActive = state.server->has_active_sessions();
+        if (state.activeCodec == camera_hub::VideoCodec::H264 &&
+            ((rtspActive && !previousRtsp) || (snapshot.directEnabled && !previousDirect))) {
+            waitingForIdr = true;
+            camera_.requestKeyFrame();
+        }
+        previousRtsp = rtspActive;
+        previousDirect = snapshot.directEnabled;
         const bool wanted = rtspActive || (snapshot.directEnabled && udp >= 0);
         if (wanted != subscribed) { camera_.setNetworkEnabled(wanted); subscribed = wanted; }
         auto frame = wanted ? camera_.tryTakeNetworkFrame() : camera_hub::FrameLease{};
         if (frame) {
+            if (frame.codec() != state.activeCodec) continue;
             const auto now = static_cast<std::uint64_t>(esp_timer_get_time());
             const auto age = now >= frame.timestampUs() ? now - frame.timestampUs() : 0;
             {
@@ -220,6 +239,10 @@ void CameraNetworkStream::run() noexcept {
                 ++state.status.oversizedFrames;
             } else {
                 const std::span<const std::uint8_t> bytes(frame.data(), frame.size());
+                if (state.activeCodec == camera_hub::VideoCodec::H264 && waitingForIdr) {
+                    if (!HardwareH264Packetizer::hasIdr(bytes)) continue;
+                    waitingForIdr = false;
+                }
                 if (rtspActive) state.server->send_frame(0, bytes);
                 if (snapshot.directEnabled && udp >= 0) {
                     const auto sendStarted = esp_timer_get_time();
@@ -234,7 +257,7 @@ void CameraNetworkStream::run() noexcept {
                         espp::RtpPacket packet;
                         packet.set_payload(chunk.data);
                         packet.set_version(2);
-                        packet.set_payload_type(26);
+                        packet.set_payload_type(state.packetizer->get_payload_type());
                         packet.set_sequence_number(sequence++);
                         packet.set_timestamp(static_cast<std::uint32_t>(frame.timestampUs() * 9 / 100));
                         packet.set_ssrc(ssrc);
@@ -264,7 +287,40 @@ void CameraNetworkStream::run() noexcept {
     camera_.setNetworkEnabled(false);
     if (udp >= 0) close(udp);
     state.udp = -1;
+    {
+        const std::lock_guard<std::mutex> lock(state.mutex);
+        state.status.ready = false;
+        state.status.directEnabled = false;
+    }
+    state.running.store(false);
     xSemaphoreGive(state.stopped);
+}
+
+bool CameraNetworkStream::configureServer(camera_hub::VideoCodec codec) noexcept {
+    auto& state = *state_;
+    {
+        const std::lock_guard<std::mutex> lock(state.mutex);
+        state.status.ready = false;
+        state.status.directEnabled = false;
+    }
+    state.server.reset();
+    espp::RtspServer::Config config{};
+    config.server_address = state.address.data();
+    config.port = 8554;
+    config.path = "cameras/csi-0";
+    config.max_data_size = 1200;
+    if (codec == camera_hub::VideoCodec::H264) {
+        state.packetizer = std::make_shared<HardwareH264Packetizer>();
+    } else state.packetizer = std::make_shared<ScanPacketizer>();
+    state.server.reset(new (std::nothrow) espp::RtspServer(config));
+    if (!state.server) return false;
+    state.server->add_track({.track_id = 0, .packetizer = state.packetizer});
+    if (!state.server->start(std::chrono::milliseconds(100))) return false;
+    state.activeCodec = codec;
+    const std::lock_guard<std::mutex> lock(state.mutex);
+    state.status.codec = codec;
+    state.status.ready = true;
+    return true;
 }
 
 } // namespace camera_stream
