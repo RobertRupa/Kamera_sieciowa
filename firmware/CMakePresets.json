@@ -8,12 +8,14 @@
   "configurePresets": [
     {
       "name": "default",
-      "displayName": "Default (development)",
-      "description": "Development configuration",
+      "displayName": "Default (ESP32-P4 development)",
+      "description": "ESP-IDF 6.1 ESP32-P4 development; fixed target without set-target/fullclean",
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/default",
       "cacheVariables": {
+        "IDF_TARGET": "esp32p4",
         "SDKCONFIG": "${sourceDir}/build/default/sdkconfig",
-        "IDF_TARGET": "esp32p4"
+        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.defaults"
       },
       "vendor": {
         "espressif/vscode-esp-idf": {
@@ -35,11 +37,14 @@
     },
     {
       "name": "production",
-      "displayName": "Production",
-      "description": "Production configuration",
+      "displayName": "Production (ESP32-P4)",
+      "description": "Separate production sdkconfig and output; same ESP32-P4 target",
+      "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/production",
       "cacheVariables": {
-        "SDKCONFIG": "${sourceDir}/build/production/sdkconfig"
+        "IDF_TARGET": "esp32p4",
+        "SDKCONFIG": "${sourceDir}/build/production/sdkconfig",
+        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.defaults"
       }
     }
   ]

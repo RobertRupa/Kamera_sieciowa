@@ -17,9 +17,9 @@ detection problem.
 2. Or open the folder `firmware/` directly in a new VS Code window.
    If using a custom multi-root workspace, choose **ESP-IDF: Pick a Workspace
    Folder** → **ESP32-P4 Firmware (ESP-IDF)**.
-3. Run **ESP-IDF: Set Espressif Device Target** → `esp32p4`.
-   The output should now refer to `.../Kamera_sieciowa/firmware/build`.
-4. Build/flash from the official ESP-IDF Activity Bar.
+3. Select **ESP-IDF: Select Project Configuration** → `default`.
+   This preset fixes `IDF_TARGET=esp32p4`, using `firmware/build/default`.
+4. Build/flash from the official ESP-IDF Activity Bar. Do not repeat `set-target` on this single-target project.
 
 **Do not delete `.../Kamera_sieciowa/build`** to work around this error:
 that directory may contain independent host tests. The root folder's own
@@ -27,6 +27,48 @@ that directory may contain independent host tests. The root folder's own
 continues to enable it and uses `firmware/build`. ESP-IDF `set-target`
 normally performs a full clean of the selected firmware build directory, so
 avoid re-running it on every build.
+
+### Recovery: `build/default` exists without `CMakeCache.txt`
+
+This can happen after an earlier CMake configure failure. A second
+**Set Espressif Device Target** action invokes `idf.py set-target`, which
+always runs `fullclean` first. ESP-IDF refuses to delete an incomplete
+directory lacking `CMakeCache.txt`. It is not an ESP32-P4 detection error.
+
+The repository now pins `IDF_TARGET=esp32p4` and
+`SDKCONFIG_DEFAULTS=sdkconfig.defaults` in **both** the `default` and
+`production` CMake presets. It also aligns the VS Code `idf.buildPath`
+with `firmware/build/default`. Do **not** run **Set Target** again to
+initialise this ESP32-P4-only project: open **ESP-IDF: Select Project
+Configuration → default**, then use **Build your Project**.
+
+**One-time recovery of the old incomplete directory** (run from the
+repository root; no data is deleted):
+
+```bash
+python3 scripts/repair_incomplete_idf_build.py --preset default
+source /home/konatsu/.espressif/v6.1/esp-idf/export.sh
+cd firmware
+idf.py --preset default build
+```
+
+You can instead run **Terminal → Run Task →
+ESP32-P4: Repair incomplete CMake build (default)** in VS Code, and then
+select **Build your Project** in the ESP-IDF sidebar.
+
+The repair script checks the selected preset and moves
+`firmware/build/default` to a unique
+`firmware/build/default.incomplete-YYYYMMDD-HHMMSS` name **only when
+the directory exists without `CMakeCache.txt`**. It preserves its
+logs, configuration and other files; a directory with a CMake cache is
+never touched. After a subsequent configure/build error, fix the **first**
+CMake/compiler error rather than repeatedly selecting Set Target.
+
+Machine-specific paths such as `idf.currentSetup`, `idf.port` and
+`clangd.path` belong in VS Code user settings or a local
+`CMakeUserPresets.json` (ignored by Git), not in tracked workspace
+settings. Existing local uncommitted settings should be saved
+separately before updating tracked files if needed.
 
 ### ESP-IDF 6.1: missing `esp_h264` during `set-target`
 
@@ -48,8 +90,8 @@ idf.py reconfigure
 idf.py build
 ```
 
-If the current `set-target` action previously failed, run
-**ESP-IDF: Set Espressif Device Target → esp32p4** once, then Build.
+If the current `set-target` action previously failed, repair the incomplete
+build directory using the script above, then run Build (without Set Target).
 The component manager re-resolves `firmware/dependencies.lock` and
 populates `firmware/managed_components/` automatically; do not manually
 copy files into that directory or remove unrelated build folders.
@@ -65,7 +107,7 @@ If a CMake preset is active, the extension may use
    **ESP-IDF 6.1** (extension Setup / Espressif Installation Manager).
 3. In the left Activity Bar select **Espressif / ESP-IDF**. If prompted,
    choose **ESP32-P4 Firmware (ESP-IDF)** as the current project folder.
-   Select target **esp32p4** and select the *programming/debug* serial
+   Select the **default** preset (target is **esp32p4**) and the *programming/debug* serial
    interface (Windows e.g. COM8; Linux e.g. /dev/ttyACM0).
 4. Use **Build Your Project**, **Flash Your Project**, **Monitor Device**
    or **Build, Flash and Start a Monitor** in the Espressif sidebar.
@@ -97,8 +139,7 @@ remains separate.
 ```bash
 # Inside exported ESP-IDF environment
 idf.py --version
-idf.py set-target esp32s3      # choose EXACT actual MCU, once per target/profile
-idf.py build
+idf.py --preset default build  # default preset sets IDF_TARGET=esp32p4
 ```
 `set-target` can regenerate project configuration and build state, so **never run it before each flash**. Commit appropriate `sdkconfig.defaults` and project `dependencies.lock`. Do not put personal port paths, Wi-Fi passwords or credentials in Git.
 

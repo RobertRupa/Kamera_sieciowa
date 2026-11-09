@@ -3,17 +3,5 @@
   "files.associations": {
     "*.hpp": "cpp"
   },
-  "idf.extensionActivationMode": "never",
-  "idf.saveBeforeBuild": true,
-  "idf.currentSetup": "/home/konatsu/.espressif/v6.1/esp-idf",
-  "idf.openOcdConfigs": [
-    "board/esp32p4-ftdi.cfg"
-  ],
-  "idf.customExtraVars": {},
-  "clangd.path": "/home/konatsu/.espressif/tools/esp-clangd/esp-21.1.3_20260408/esp-clangd/bin/clangd",
-  "clangd.arguments": [
-    "--background-index",
-    "--query-driver=**",
-    "--compile-commands-dir=/home/konatsu/Documents/justyna/Kamera_sieciowa/build"
-  ]
+  "idf.extensionActivationMode": "never"
 }

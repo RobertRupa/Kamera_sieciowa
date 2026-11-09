@@ -3,6 +3,7 @@
 **/build-*/
 **/build.invalid-*/
 **/cmake-build-*/
+**/CMakeUserPresets.json
 **/managed_components/
 **/sdkconfig
 **/sdkconfig.old
