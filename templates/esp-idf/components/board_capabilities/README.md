@@ -32,7 +32,7 @@ if (web == board_capabilities::CapabilityState::Ready) {
 No service is initialized by this component. Integrate an ESP-IDF adapter that:
 - verifies expected target and peripheral drivers against the manifest;
 - supplies runtime status from actual initialized services;
-- exposes a **read-only** authenticated `GET /api/v1/device/capabilities`, serialized using `featureKey()`/`stateKey()`;
+- exposes a **read-only** `GET /api/v1/device/capabilities`, serialized using `featureKey()`/`stateKey()`; production endpoints require authentication;
 - projects the same snapshot into LVGL presenter if installed.
 
 Use a consistent runtime snapshot for all capabilities to avoid torn/cross-task reads; reconcile if service statuses are updated concurrently. Registry readiness is advisory, not authorization or a transactional guarantee. Recheck permissions and actual state in every action handler.

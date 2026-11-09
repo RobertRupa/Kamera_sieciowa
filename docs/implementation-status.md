@@ -37,28 +37,32 @@ implementations.
 | --- | --- | --- |
 | FrameBroker / FrameLease | Implemented, host tested | CTest ownership, backpressure, pool recovery, 10,000-frame threaded run |
 | ProfilePolicy | Implemented, host tested | CTest format bounds and USB conflicts |
-| Hardware manifest | Model and reported SDIO/I2C pinout documented; runtime unverified | Vendor references, supplied allocation table, unknown GPIOs remain null |
-| Capability diagnostics | Implemented | Reuses upstream CapabilityRegistry, adapters disabled |
-| Wi-Fi AP/STA adapter | AP starts and DHCP reports 192.168.4.1; SSID not seen by Windows; STA untested | ESP-Hosted 3.1.0 / remote 1.6.5; C6 `nvs_enable=0` |
+| Hardware manifest | Manufacturer GPIO allocation and model-level peripheral inventory documented; runtime unverified | Waveshare product page/GPIO table; PCB revision and schematic correspondence remain unknown |
+| Capability diagnostics | Implemented in dev profile | OV5647/one CSI frame verified; camera capability remains `unverified` because PCB revision and sustained capture are not verified |
+| Wi-Fi AP/STA adapter | AP DHCP starts; Windows SSID visibility unconfirmed; STA IP acquired | ESP-Hosted 3.1.0 / remote 1.6.5; station `192.168.69.126` observed |
 | mDNS adapter | Start path returned without error; resolution untested | mDNS 1.15.1; gated by actual AP IP |
 | Plain NVS credential store | Device initialization and host contract tests pass; credential reboot persistence untested | `app_config`, one versioned Wi-Fi blob, no automatic erase |
 | Wi-Fi setup panel | Typecheck, Vitest and browser tests pass | Scoped-session client, plaintext warning, manual SSID, validation |
 | Network provisioner | Implemented, host tested | One queued request, persist before STA, boot restore, IP-confirmed connection |
 | Limited provisioning HTTP API | Server start path reached; no HTTP client request tested | AP-address restriction, client-bound token, credential and operation routes |
+| Device status/capabilities API | HTTP GET and embedded browser GUI verified | `/api/v1/device/status` reports OV5647 and `frame_captured`; capability remains `unverified` |
+| One-frame camera probe | Implemented and passed on current unit | OV5647 PID `0x5647`; one 800x800 MIPI-CSI frame (1,280,000 bytes); probe stops before network startup |
 | ESP-IDF P4 firmware | Build, flash and boot pass | ESP-IDF 6.1.0 / esp32p4 on COM8 |
-| Vue WebGUI foundation | Implemented, host/browser tested | Connection/diagnostics, en/pl, session-local theme, no simulated feed |
+| Vue WebGUI foundation | Implemented, host and device-browser tested | Same-origin auto-connect displays OV5647 and one-frame probe; persistent stream remains absent |
 | CI | Configured, not run on GitHub | Host, frontend and diagnostic build jobs; no release certification |
 | GitHub publication | Blocked | No authenticated fork/create tool or gh available |
 
 ## Not Implemented
 
-- OV5647 detection, MIPI-CSI/ISP capture and hardware JPEG encoding.
+- Persistent MIPI-CSI/ISP capture, FrameBroker producer and integration of the
+    P4 hardware JPEG/H.264 encoders.
 - USB UVC device adapter and buffer-return integration.
 - HTTP multipart MJPEG and RTSP/RTP JPEG, including media authentication.
 - Ethernet, routing/failover, full AP wizard/captive portal, network scan/reconnect
     and full mDNS lifecycle management.
 - Hardware activation/read-write-reboot verification of plaintext NVS,
   unique administrator onboarding and authenticated device API.
+- Sustained OV5647 capture/FrameBroker producer; IMX219 has no driver in the current resolved sensor component.
 - Device-side serving of WebGUI and persistent settings.
 - Production release security profile and hardware endurance verification.
 
@@ -66,7 +70,7 @@ implementations.
 
 1. Exact PCB revision and matching schematic; camera model/sensor and ribbon cable.
 2. Verified USB device routing, jumpers and power/VBUS arrangement.
-3. Camera clock/power/reset, Ethernet PHY address/clock/reset, C6 SDIO pin map.
+3. Camera clock/power/reset, Ethernet PHY address/clock/reset, and electrical correspondence of C6 SDIO/EN to this PCB revision.
 4. Hardware verification that C6 does not persist Wi-Fi credentials and P4 NVS survives reboot.
 5. Reviewed RTSP component/API, compatible JPEG payload and authenticated sessions.
 

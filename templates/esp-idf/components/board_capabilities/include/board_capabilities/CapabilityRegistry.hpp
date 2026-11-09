@@ -18,6 +18,7 @@ enum class Feature : std::uint8_t {
     Touch,
     Lvgl,
     CredentialStorage,
+    Camera,
     Count,
 };
 
@@ -41,6 +42,7 @@ struct BuildFeatures {
     bool touchDriver{false};
     bool lvgl{false};
     bool credentialStorage{false};
+    bool cameraCapture{false};
 };
 
 // Consistent snapshot captured by the application from live service contracts.
@@ -56,6 +58,7 @@ struct RuntimeState {
     bool touchReady{false};
     bool lvglRunning{false};
     bool credentialStorageReady{false};
+    bool cameraCaptureReady{false};
 };
 
 constexpr std::size_t kFeatureCount = static_cast<std::size_t>(Feature::Count);

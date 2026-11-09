@@ -16,7 +16,7 @@ constexpr char kTag[] = "wifi_service";
 
 WifiService::~WifiService() { stop(); }
 
-void WifiService::onWifiEvent(void* context, esp_event_base_t, int32_t event, void*) {
+void WifiService::onWifiEvent(void* context, esp_event_base_t, int32_t event, void* data) {
     auto& service = *static_cast<WifiService*>(context);
     if (event == WIFI_EVENT_AP_START) {
         xEventGroupSetBits(service.events_, BIT0);
@@ -24,6 +24,10 @@ void WifiService::onWifiEvent(void* context, esp_event_base_t, int32_t event, vo
         xEventGroupClearBits(service.events_, BIT0);
     } else if (event == WIFI_EVENT_STA_DISCONNECTED) {
         xEventGroupClearBits(service.events_, BIT1);
+    } else if (event == WIFI_EVENT_SCAN_DONE) {
+        const auto* scan = static_cast<const wifi_event_sta_scan_done_t*>(data);
+        if (scan == nullptr || scan->status != 0) xEventGroupSetBits(service.events_, BIT3);
+        xEventGroupSetBits(service.events_, BIT2);
     }
 }
 
@@ -104,6 +108,8 @@ esp_err_t WifiService::startProvisioning(const camera_hub::ProvisioningPrerequis
     }
     if (result != ESP_OK) {
         stop();
+    } else {
+        apActive_ = true;
     }
     return result;
 }
@@ -114,7 +120,9 @@ bool WifiService::waitForAp(TickType_t timeout) const noexcept {
 
 camera_hub::WifiError WifiService::connectStation(const camera_hub::WifiCredentials& credentials) noexcept {
     using namespace camera_hub;
+    const std::lock_guard<std::mutex> lock(scanMutex_);
     if (!initialized_) return WifiError::NotReady;
+    if (scanActive_) return WifiError::NotReady;
     CredentialRecord record{};
     const auto validated = WifiCredentialCodec::encode(credentials, record);
     mbedtls_platform_zeroize(record.data(), record.size());
@@ -133,6 +141,104 @@ camera_hub::WifiError WifiService::connectStation(const camera_hub::WifiCredenti
     return result == ESP_OK ? WifiError::None : WifiError::DriverFailure;
 }
 
+camera_hub::WifiError WifiService::startScan() noexcept {
+    using namespace camera_hub;
+    const std::lock_guard<std::mutex> lock(scanMutex_);
+    if (!initialized_ || events_ == nullptr) return WifiError::NotReady;
+    if (scanActive_) return WifiError::NotReady;
+
+    xEventGroupClearBits(events_, BIT2 | BIT3);
+    wifi_scan_config_t config{};
+    config.show_hidden = true;
+    const auto result = esp_wifi_scan_start(&config, false);
+    if (result != ESP_OK) {
+        return result == ESP_ERR_WIFI_STATE ? WifiError::NotReady : WifiError::DriverFailure;
+    }
+    scanActive_ = true;
+    return WifiError::None;
+}
+
+bool WifiService::scanComplete() const noexcept {
+    return initialized_ && events_ != nullptr && (xEventGroupGetBits(events_) & BIT2) != 0;
+}
+
+void WifiService::cancelScan() noexcept {
+    const std::lock_guard<std::mutex> lock(scanMutex_);
+    if (!initialized_ || events_ == nullptr || !scanActive_) return;
+    esp_wifi_scan_stop();
+    esp_wifi_clear_ap_list();
+    scanActive_ = false;
+    xEventGroupClearBits(events_, BIT2 | BIT3);
+}
+
+camera_hub::WifiError WifiService::collectScanResults(camera_hub::WifiScanResult* results,
+                                                       std::size_t capacity,
+                                                       std::size_t& count) noexcept {
+    using namespace camera_hub;
+    count = 0;
+    if (capacity > kMaxWifiScanResults || (capacity != 0 && results == nullptr)) {
+        return WifiError::InvalidArgument;
+    }
+    const std::lock_guard<std::mutex> lock(scanMutex_);
+    if (!initialized_ || !scanActive_ || !scanComplete()) return WifiError::NotReady;
+
+    const auto clearActive = [this] {
+        scanActive_ = false;
+        xEventGroupClearBits(events_, BIT2 | BIT3);
+    };
+    if ((xEventGroupGetBits(events_) & BIT3) != 0) {
+        esp_wifi_clear_ap_list();
+        clearActive();
+        return WifiError::DriverFailure;
+    }
+    uint16_t available = 0;
+    auto result = esp_wifi_scan_get_ap_num(&available);
+    if (result != ESP_OK) {
+        esp_wifi_clear_ap_list();
+        clearActive();
+        return WifiError::DriverFailure;
+    }
+
+    const auto requested = std::min<std::size_t>(available, capacity);
+    for (std::size_t index = 0; index < requested; ++index) {
+        wifi_ap_record_t record{};
+        result = esp_wifi_scan_get_ap_record(&record);
+        if (result != ESP_OK) {
+            esp_wifi_clear_ap_list();
+            clearActive();
+            return WifiError::DriverFailure;
+        }
+        auto& output = results[count++];
+        const auto ssidLength = std::min<std::size_t>(sizeof(record.ssid), output.ssid.size() - 1);
+        std::memcpy(output.ssid.data(), record.ssid, ssidLength);
+        output.rssi = record.rssi;
+        switch (record.authmode) {
+        case WIFI_AUTH_OPEN: output.security = WifiSecurity::Open; break;
+        case WIFI_AUTH_WEP: output.security = WifiSecurity::Wep; break;
+        case WIFI_AUTH_WPA_PSK: output.security = WifiSecurity::WpaPsk; break;
+        case WIFI_AUTH_WPA2_PSK: output.security = WifiSecurity::Wpa2Psk; break;
+        case WIFI_AUTH_WPA_WPA2_PSK: output.security = WifiSecurity::WpaWpa2Psk; break;
+        case WIFI_AUTH_ENTERPRISE: output.security = WifiSecurity::Enterprise; break;
+        case WIFI_AUTH_WPA3_PSK: output.security = WifiSecurity::Wpa3Psk; break;
+        case WIFI_AUTH_WPA2_WPA3_PSK: output.security = WifiSecurity::Wpa2Wpa3Psk; break;
+        case WIFI_AUTH_OWE: output.security = WifiSecurity::Owe; break;
+        default: output.security = WifiSecurity::Unknown; break;
+        }
+    }
+    if (available > requested || requested == 0) esp_wifi_clear_ap_list();
+    clearActive();
+    return WifiError::None;
+}
+
+esp_err_t WifiService::stopAccessPoint() noexcept {
+    const std::lock_guard<std::mutex> lock(scanMutex_);
+    if (!initialized_ || !apActive_) return ESP_ERR_INVALID_STATE;
+    if (scanActive_) return ESP_ERR_INVALID_STATE;
+    const auto result = esp_wifi_set_mode(WIFI_MODE_STA);
+    if (result == ESP_OK) apActive_ = false;
+    return result;
+}
+
 bool WifiService::stationHasIp() const noexcept {
     if (!initialized_ || events_ == nullptr || (xEventGroupGetBits(events_) & BIT1) == 0) return false;
     wifi_ap_record_t actual{};
@@ -142,12 +248,22 @@ bool WifiService::stationHasIp() const noexcept {
            (length == 32 || actual.ssid[length] == 0);
 }
 
+std::uint32_t WifiService::stationAddress() const noexcept {
+    if (!stationHasIp() || sta_ == nullptr) return 0;
+    esp_netif_ip_info_t info{};
+    return esp_netif_get_ip_info(sta_, &info) == ESP_OK ? info.ip.addr : 0;
+}
+
 std::uint32_t WifiService::apAddress() const noexcept {
     esp_netif_ip_info_t info{};
-    return ap_ != nullptr && esp_netif_get_ip_info(ap_, &info) == ESP_OK ? info.ip.addr : 0;
+    return apActive_ && ap_ != nullptr && esp_netif_get_ip_info(ap_, &info) == ESP_OK ? info.ip.addr : 0;
 }
 
 void WifiService::stop() noexcept {
+    {
+        const std::lock_guard<std::mutex> lock(scanMutex_);
+        scanActive_ = false;
+    }
     if (initialized_) {
         esp_wifi_stop();
     }
@@ -181,6 +297,7 @@ void WifiService::stop() noexcept {
         hostedInitialized_ = false;
     }
     requestedSsid_.fill(0);
+    apActive_ = false;
 }
 
 }

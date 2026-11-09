@@ -53,6 +53,13 @@ silently create a separate capture configuration. Map Busy to HTTP 409 and
 Unverified to HTTP 503. The future controller must serialize configuration and
 USB lifecycle changes in one owning task to avoid check-then-update races.
 
+## Raspberry Pi CSI Module Compatibility
+
+The supported sensor drivers and hardware-verification status are tracked in
+the [Raspberry Pi CSI camera compatibility matrix](camera-compatibility.md).
+An upstream sensor driver being compiled does not mean the attached module or
+the board's CSI wiring has been validated.
+
 ## Pending Adapter Boundary
 
 The intended flow is `esp_video capture -> JPEG encoder -> FrameBroker -> UVC /

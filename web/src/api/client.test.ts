@@ -25,6 +25,14 @@ describe('device boundary', () => {
     } })
     expect(status.data.camera_hardware).toBeUndefined()
   })
+  it('accepts explicit unknown camera hardware from firmware', () => {
+    const status = statusSchema.parse({ data: {
+      firmware_version: '0.1.0', uptime_seconds: 0, free_heap_bytes: 0, camera: null,
+      camera_probe_state: 'not_run', camera_hardware: null,
+    } })
+    expect(status.data.camera_hardware).toBeNull()
+    expect(status.data.camera_probe_state).toBe('not_run')
+  })
   it.each(['IMX219', 'OV5647'])('preserves a detected %s without requiring an active stream', sensor => {
     const status = statusSchema.parse({ data: {
       firmware_version: '0.1.0', uptime_seconds: 0, free_heap_bytes: 0, camera: null,

@@ -11,6 +11,7 @@ public:
     virtual ~IWifiStation() = default;
     [[nodiscard]] virtual WifiError connectStation(const WifiCredentials& credentials) noexcept = 0;
     [[nodiscard]] virtual bool stationHasIp() const noexcept = 0;
+    [[nodiscard]] virtual std::uint32_t stationAddress() const noexcept = 0;
 };
 
 }

@@ -35,3 +35,23 @@ web/src/
 
 ## Security and failures
 Authenticated session for state changes; bounded JSON, method whitelist, CSRF for cookie auth, conservative CORS, sane cookie lifetime, no passwords in GET/status. HTTPS/secure transport for release according to threat model; local lab HTTP should show insecure development warning. Report network disconnect, async scan/retry and AP→STA switch clearly, without permanent loading spinner. Use ordinary frontend unit/component tests and browser/mobile-width smoke checks.
+
+## Wi-Fi Provisioning Client Status
+
+`WifiView.vue` reads readiness from `/api/v1/provisioning/status`, obtains one
+short-lived peer-bound session, starts and polls a bounded scan, allows selecting
+supported secured networks or entering an SSID manually, and polls the async
+connection operation. Unsupported scan security modes are disabled rather than
+advertised as connectable. Credentials and the token are not written to browser
+storage; the password field is cleared after the request lifecycle.
+
+The client requires same-origin hosting because the firmware rejects foreign
+origins and does not enable CORS. The production Vite assets are embedded as
+gzip data and served from both AP and STA addresses. After station connection,
+the UI shows a link to the assigned STA IP and continues in read-only mode there;
+session, scan and credential-write controls remain AP-only. Captive DNS/probe
+integration remains pending. The inspected captive component
+does not list ESP32-P4 as a supported target; do not enable it or substitute
+broad handwritten DNS interception without a verified P4-compatible
+implementation. Live browser/API behavior on an associated phone has not yet
+been tested.

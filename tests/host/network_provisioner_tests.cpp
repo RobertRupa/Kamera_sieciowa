@@ -35,6 +35,7 @@ public:
     Store& store;
     int calls{0};
     bool hasIp{false};
+    std::uint32_t address{0x0100007f};
     WifiError result{WifiError::None};
     explicit Station(Store& source) : store(source) {}
     WifiError connectStation(const WifiCredentials&) noexcept override {
@@ -43,6 +44,7 @@ public:
         return result;
     }
     bool stationHasIp() const noexcept override { return hasIp; }
+    std::uint32_t stationAddress() const noexcept override { return hasIp ? address : 0; }
 };
 
 int main() {
@@ -87,7 +89,9 @@ int main() {
     service.processPending();
     station.hasIp = true;
     service.updateConnection(false);
-    require(service.snapshot().state == ProvisioningState::Connected, "IP confirms connected");
+        require(service.snapshot().state == ProvisioningState::Connected &&
+            service.snapshot().stationAddress == station.address,
+            "IP confirms connected and publishes the assigned address");
     credentials.clear();
     require(service.submit(credentials, operation) == SubmitResult::InvalidArgument, "invalid credentials rejected");
     std::puts("PASS: queued provisioning, secure-write ordering, failure and real-IP confirmation");

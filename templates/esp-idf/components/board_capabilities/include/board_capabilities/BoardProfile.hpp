@@ -25,6 +25,7 @@ struct BoardProfile {
     Verification display;
     Verification touch;
     Verification credentialStoragePartition;
+    Verification camera;
 };
 
 // Demonstration ONLY. Returned profile deliberately has no verified peripherals.

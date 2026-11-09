@@ -13,6 +13,7 @@ enum class SubmitResult : std::uint8_t { Accepted, InvalidArgument, NotReady, Bu
 enum class RestoreResult : std::uint8_t { Started, NoCredentials, StoreUnavailable, Busy, StorageFailure, WifiFailure };
 struct ProvisioningSnapshot {
     std::uint32_t operationId{0};
+    std::uint32_t stationAddress{0};
     ProvisioningState state{ProvisioningState::Idle};
     camera_hub::CredentialError storageError{camera_hub::CredentialError::None};
     camera_hub::WifiError wifiError{camera_hub::WifiError::None};
@@ -25,6 +26,7 @@ public:
     [[nodiscard]] RestoreResult restoreSavedCredentials() noexcept;
     void processPending() noexcept;
     void updateConnection(bool timedOut) noexcept;
+    [[nodiscard]] std::uint32_t stationAddress() const noexcept;
     [[nodiscard]] ProvisioningSnapshot snapshot() const noexcept;
 
 private:

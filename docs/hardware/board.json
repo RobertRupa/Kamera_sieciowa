@@ -8,7 +8,7 @@
     "model": "ESP32-P4-Module-DEV-KIT",
     "pcb_revision": null,
     "schematic_url": "https://files.waveshare.com/wiki/ESP32-P4-Module-DEV-KIT/ESP32-P4-Module-DEV-KIT.pdf",
-    "notes": "Vendor model identified; the actual PCB revision and wiring have not been audited."
+    "notes": "The user confirmed Waveshare SKU 30560 (base product model). Physical PCB revision and correspondence to the linked schematic remain unverified."
   },
   "primary_mcu": {
     "idf_target": "esp32p4",
@@ -32,9 +32,9 @@
       "credential_storage_build_policy": "C6 Wi-Fi driver NVS disabled by nvs_enable=0; P4 app stores plaintext credential record",
       "transport": "SDIO",
       "pinout_source": "docs/hardware/pin-map.md",
-      "pinout_status": "user_supplied_table",
+      "pinout_status": "manufacturer_gpio_allocation_table",
       "supported_driver_options": ["esp_wifi_remote", "esp_hosted"],
-      "notes": "C6 was upgraded by P4/SDIO using a temporary ESP-Hosted 2.13.1 legacy RPC host and application image 3.1.0. After restoring the 3.1.0 P4 host, runtime reported matching firmware, RPC V2, target esp32c6 and identity success. Wi-Fi/IP operation and credential persistence remain unverified; no Wi-Fi Ready state is inferred from transport success."
+      "notes": "The manufacturer GPIO allocation table assigns C6 SDIO D0-D3 to GPIO14-17, CLK to GPIO18, CMD to GPIO19 and C6_EN to GPIO54; GPIO6 is a separate C6_GPIO2 signal. The physical PCB revision/electrical correspondence remains unverified. C6 runtime identity and matching ESP-Hosted 3.1.0 host/coproc versions were observed over SDIO. Wi-Fi/IP operation and credential persistence remain unverified; no Wi-Fi Ready state is inferred from transport success."
     }
   },
   "ethernet": {
@@ -42,34 +42,53 @@
     "interface": "RMII",
     "phy": "IP101GRI",
     "speed_mbps": 100,
-    "notes": "Vendor-documented RJ45/PHY; exact revision, PHY address, clock and reset wiring require audit."
+    "source": "https://docs.waveshare.com/ESP32-P4-Module-DEV-KIT",
+    "notes": "Manufacturer documents an RJ45 100 Mbps Ethernet interface. The pin table lists the RMII signals; exact PCB correspondence, PHY revision/address, clock and reset wiring require schematic and hardware audit."
   },
   "camera": {
     "verification": "unverified",
     "interface": "MIPI-CSI",
+    "lanes": 2,
+    "source": "https://docs.waveshare.com/ESP32-P4-Module-DEV-KIT",
     "module": "UC-439",
     "module_revision": "B",
     "reported_sensors": ["IMX219", "OV5647"],
-    "identification_source": "user_report",
+    "identification_source": "runtime_probe",
     "candidate_sensor": "OV5647",
-    "actual_sensor": null,
+    "actual_sensor": "OV5647",
     "supported_profiles": [],
-    "notes": "User reports connected UC-439 rev.B and sensor names IMX219/OV5647. These are alternative identities pending actual sensor detection, not two verified sensors or confirmed driver support."
+    "last_probe": {
+      "date": "2026-11-09",
+      "sensor_id": "0x5647",
+      "state": "frame_captured",
+      "width_px": 800,
+      "height_px": 800,
+      "frame_bytes": 1280000,
+      "interface": "MIPI-CSI",
+      "capture_duration_frames": 1,
+      "source": "docs/verification.md#device-status-firmware-flash-and-camera-report"
+    },
+    "notes": "Runtime probe identified OV5647 PID 0x5647 and captured one 800x800 CSI frame on the current unit. UC-439 rev.B remains user-reported module identity; PCB revision, ribbon orientation and sustained capture are not verified."
   },
   "usb": {
     "verification": "unverified",
+    "interface": "USB 2.0 OTG high-speed",
+    "connector": "Type-A",
+    "role_selection": "Jumper-selectable host/device",
     "requested_role": "UVC device",
-    "notes": "Audit OTG device routing, jumpers and VBUS. Do not connect two hosts or use an ordinary A-to-A cable."
+    "source": "https://docs.waveshare.com/ESP32-P4-Module-DEV-KIT",
+    "notes": "Manufacturer documents a Type-A OTG interface and jumper-based role selection. Actual connector routing, jumper state, VBUS protection and UVC operation remain unverified. Do not connect two hosts or use an ordinary A-to-A cable."
   },
   "display": {
     "verification": "absent",
-    "interface": null,
+    "interface": "MIPI-DSI, 2-lane board connector",
+    "source": "https://docs.waveshare.com/ESP32-P4-Module-DEV-KIT",
     "controller": null,
     "width_px": null,
     "height_px": null,
     "rotation_deg": null,
     "backlight_gpio": null,
-    "source": null
+    "notes": "The board provides a DSI connector; no attached panel is recorded. Manufacturer lists compatible 5, 7, 8 and 10.1 inch panels."
   },
   "touch": {
     "verification": "absent",
@@ -77,6 +96,128 @@
     "interface": null,
     "i2c_address": null,
     "source": null
+  },
+  "board_peripherals": {
+    "source": "https://docs.waveshare.com/ESP32-P4-Module-DEV-KIT",
+    "source_scope": "Manufacturer-documented model features; not proof of the physical PCB revision, wiring or runtime operation.",
+    "integration_guide": "docs/hardware/peripheral-integration.md",
+    "processor": {
+      "high_performance": {
+        "cores": 2,
+        "architecture": "32-bit RISC-V",
+        "max_frequency_mhz": 400,
+        "extensions": ["DSP", "FPU"]
+      },
+      "low_power": {
+        "cores": 1,
+        "architecture": "32-bit RISC-V",
+        "max_frequency_mhz": 40
+      },
+      "internal_memory_bytes": {
+        "high_performance_rom": 131072,
+        "low_power_rom": 16384,
+        "high_performance_l2": 786432,
+        "low_power_sram": 32768,
+        "tightly_coupled_memory": 8192
+      }
+    },
+    "memory": {
+      "flash_bytes": 16777216,
+      "flash_type": "NOR Flash integrated on module",
+      "psram_bytes": 33554432,
+      "psram_type": "Stacked PSRAM"
+    },
+    "wireless_companion": {
+      "soc": "ESP32-C6",
+      "connection": "SDIO",
+      "manufacturer_claims": ["Wi-Fi 6", "Bluetooth 5"],
+      "runtime_readiness": "Not inferred from manufacturer documentation"
+    },
+    "media_acceleration": {
+      "camera": {
+        "isp": "Integrated image signal processor",
+        "encoders": ["H.264", "JPEG"],
+        "manufacturer_claimed_max": "1080p at 30 fps; not measured in this project"
+      },
+      "display": {
+        "accelerators": ["PPA", "2D DMA"],
+        "jpeg_decoder_manufacturer_claimed_max": "1080p at 30 fps; not measured in this project"
+      }
+    },
+    "interfaces": {
+      "tf_card": {
+        "interface": "SDIO 3.0",
+        "connector": "TF card slot",
+        "gpio_map": "docs/hardware/pin-map.md"
+      },
+      "i2c_port": {
+        "gpio_sda": 7,
+        "gpio_scl": 8,
+        "notes": "GPIO allocation table also labels these pins for DSI/CSI and CODEC SDA/SCL."
+      },
+      "i3c_port": {
+        "gpio_sda": null,
+        "gpio_scl": null,
+        "notes": "Port is shown in the manufacturer board description; its GPIO assignment is not given in the published allocation table."
+      },
+      "audio": {
+        "verification": "unverified",
+        "microphone": "Onboard microphone",
+        "codec": "Onboard audio codec; model not specified in the product page",
+        "amplifier": "Onboard speaker amplifier; model not specified in the product page",
+        "speaker_connector": "MX1.25, 2-pin",
+        "speaker_rating": "8 ohm, 2 W",
+        "gpio_map": "docs/hardware/pin-map.md"
+      }
+    },
+    "connectors": [
+      {
+        "name": "MIPI-CSI camera",
+        "lanes": 2
+      },
+      {
+        "name": "MIPI-DSI display",
+        "lanes": 2,
+        "compatible_panel_sizes_in": [5, 7, 8, 10.1]
+      },
+      {
+        "name": "USB-C programming/power/debug",
+        "count": 2,
+        "notes": "Manufacturer describes both Type-C connectors as supporting power and programming; one is also described for debugging."
+      },
+      {
+        "name": "USB Type-A OTG",
+        "role_selection": "Jumper-selectable host/device"
+      },
+      {
+        "name": "RJ45 Ethernet",
+        "speed_mbps": 100
+      },
+      {
+        "name": "ESP32-C6 UART header"
+      },
+      {
+        "name": "5 V power header",
+        "connector": "SH1.0, 2-pin"
+      },
+      {
+        "name": "RTC battery connector",
+        "notes": "Manufacturer specifies rechargeable RTC batteries only."
+      },
+      {
+        "name": "PoE module interface",
+        "status": "Reserved interface; do not assume a PoE module is installed."
+      },
+      {
+        "name": "40-pin header",
+        "description": "2x20; manufacturer says 28 remaining programmable GPIOs are brought out."
+      }
+    ],
+    "controls": [
+      "BOOT button",
+      "RESET button",
+      "Power indicator"
+    ]
   },
   "security": {
     "wifi_credential_storage": {
@@ -105,10 +246,50 @@
     "flash_encryption_enabled": false
   },
   "pins": [
-    {"signal": "CAMERA_SDA", "gpio": 7, "direction": "bidir", "source": "docs/hardware/pin-map.md"},
-    {"signal": "CAMERA_SCL", "gpio": 8, "direction": "output", "source": "docs/hardware/pin-map.md"},
-    {"signal": "CAMERA_RESET", "gpio": null, "direction": "output", "source": null},
+    {"signal": "GPIO0", "gpio": 0, "direction": "unspecified", "table_label": "IO0", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO1", "gpio": 1, "direction": "unspecified", "table_label": "IO1", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO2", "gpio": 2, "direction": "unspecified", "table_label": "IO2", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO3", "gpio": 3, "direction": "unspecified", "table_label": "IO3", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO4", "gpio": 4, "direction": "unspecified", "table_label": "IO4", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO5", "gpio": 5, "direction": "unspecified", "table_label": "IO5", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO20", "gpio": 20, "direction": "unspecified", "table_label": "IO20", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO21", "gpio": 21, "direction": "unspecified", "table_label": "IO21", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO22", "gpio": 22, "direction": "unspecified", "table_label": "IO22", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO23", "gpio": 23, "direction": "unspecified", "table_label": "IO23", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO26", "gpio": 26, "direction": "unspecified", "table_label": "IO26", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO27", "gpio": 27, "direction": "unspecified", "table_label": "IO27", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO46", "gpio": 46, "direction": "unspecified", "table_label": "IO46", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO47", "gpio": 47, "direction": "unspecified", "table_label": "IO47", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "GPIO48", "gpio": 48, "direction": "unspecified", "table_label": "IO48", "assignment_type": "label_only", "source": "docs/hardware/pin-map.md"},
+    {"signal": "SHARED_SDA", "gpio": 7, "direction": "bidir", "functions": ["DSI/CSI_SDA", "CODEC_SDA", "I2C_SDA"], "source": "docs/hardware/pin-map.md"},
+    {"signal": "SHARED_SCL", "gpio": 8, "direction": "bidir", "functions": ["DSI/CSI_SCL", "CODEC_SCL", "I2C_SCL"], "source": "docs/hardware/pin-map.md"},
+    {"signal": "I2S_DOUT", "gpio": 9, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "I2S_LRCK", "gpio": 10, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "I2S_DIN", "gpio": 11, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "I2S_BCLK", "gpio": 12, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "I2S_MCLK", "gpio": 13, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "USB1P_N", "gpio": 24, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "USB1P_P", "gpio": 25, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "ETH_RXDV", "gpio": 28, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "ETH_RXD0", "gpio": 29, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "ETH_RXD1", "gpio": 30, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "ETH_MDC", "gpio": 31, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "ETH_TXD0", "gpio": 34, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "ETH_TXD1", "gpio": 35, "direction": "unspecified", "source": "docs/hardware/pin-map.md", "other_table_label": "BOOT"},
+    {"signal": "UART0_TX", "gpio": 37, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "UART0_RX", "gpio": 38, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "TF_D0", "gpio": 39, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "TF_D1", "gpio": 40, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "TF_D2", "gpio": 41, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "TF_D3", "gpio": 42, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "TF_CLK", "gpio": 43, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "TF_CMD", "gpio": 44, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "TF_PWR_CTRL", "gpio": 45, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "ETH_TXEN", "gpio": 49, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "ETH_REF_CLK", "gpio": 50, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
     {"signal": "ETH_PHY_RESET", "gpio": 51, "direction": "output", "source": "docs/hardware/pin-map.md"},
+    {"signal": "ETH_MDIO", "gpio": 52, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
+    {"signal": "AUDIO_PA_CTRL", "gpio": 53, "direction": "unspecified", "source": "docs/hardware/pin-map.md"},
     {"signal": "WIFI_SDIO_CLK", "gpio": 18, "direction": "output", "source": "docs/hardware/pin-map.md"},
     {"signal": "WIFI_SDIO_CMD", "gpio": 19, "direction": "bidir", "source": "docs/hardware/pin-map.md"},
     {"signal": "WIFI_SDIO_D0", "gpio": 14, "direction": "bidir", "source": "docs/hardware/pin-map.md"},
@@ -133,12 +314,20 @@
       "source": "docs/verification.md#wi-fi-and-mdns-implementation"
     },
     {
-      "claim": "Model has P4, C6/SDIO, 16 MiB Flash, 32 MiB PSRAM, IP101GRI Ethernet, MIPI-CSI and USB OTG HS; these are vendor facts, not runtime readiness.",
-      "source": "https://www.waveshare.com/wiki/ESP32-P4-Module-DEV-KIT-StartPage"
+      "claim": "The manufacturer documents P4/C6 SDIO, 16 MiB NOR Flash, 32 MiB PSRAM, 100 Mbps RJ45 Ethernet, MIPI-CSI/DSI, USB OTG HS, TF/SDIO, audio and board connectors. These model-level claims do not establish this PCB revision or runtime readiness.",
+      "source": "https://docs.waveshare.com/ESP32-P4-Module-DEV-KIT"
+    },
+    {
+      "claim": "GPIO assignments in docs/hardware/pin-map.md are transcribed from the manufacturer allocation table; schematic and exact PCB-revision correspondence remain unverified.",
+      "source": "https://docs.waveshare.com/assets/images/ESP32-P4-Module-DEV-KIT-GPIO-Table-62db22ecf65136c07d4a40058d27121d.webp"
     },
     {
       "claim": "OV5647 has an upstream sensor driver; actual camera/cable compatibility remains unknown.",
       "source": "https://github.com/espressif/esp-video-components/tree/master/esp_cam_sensor"
+    },
+    {
+      "claim": "Runtime probe detected OV5647 PID 0x5647 and captured one 800x800 MIPI-CSI frame (1,280,000 bytes) on the current unit; sustained stream and PCB/cable revision remain unverified.",
+      "source": "docs/verification.md#device-status-firmware-flash-and-camera-report"
     },
     {
       "claim": "Upstream esp_video UVC example supports ESP32-P4; combined UVC/HTTP/RTSP is not yet integrated.",
@@ -147,11 +336,12 @@
   ],
   "needs_verification": [
     "PCB revision and schematic correspondence",
-    "Actual sensor, connector, ribbon orientation, supply and XCLK",
+    "Physical PCB revision, ribbon orientation, CSI lane routing, supply and XCLK",
+    "Sustained camera capture, persistent video profile and frame stability",
     "USB device routing, jumpers, VBUS protection and appropriate cable",
     "PHY address, RMII clock/reset and all assigned GPIOs",
-    "Supplied GPIO table correspondence to the actual PCB revision, C6_EN electrical behavior and host/companion firmware compatibility",
-    "Actual Flash/PSRAM boot probe and camera DMA/cache requirements",
+    "Physical PCB revision and its correspondence to the manufacturer schematic; GPIO electrical details and C6_EN behavior",
+    "PSRAM boot probe and camera DMA/cache requirements; 16 MiB Flash was observed on the current P4",
     "Plain NVS app_config read/write/reboot persistence and C6 no-duplicate-write behavior on hardware",
     "JPEG profile compatibility with UVC and RFC 2435 RTSP packetizer"
   ]

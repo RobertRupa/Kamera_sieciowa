@@ -11,6 +11,7 @@ BoardProfile makeIllustrativeP4C6Profile() noexcept {
         Verification::Unverified, // LCD controller/pins not verified.
         Verification::Unverified, // Touch controller/pins not verified.
         Verification::Unverified, // Credential storage partition not verified.
+        Verification::Unverified, // Camera sensor and board wiring not verified.
     };
 }
 

@@ -18,6 +18,12 @@ target_include_directories(profile_policy_tests PRIVATE "${DOMAIN_COMPONENT}/inc
 target_compile_features(profile_policy_tests PRIVATE cxx_std_17)
 add_test(NAME profile_policy COMMAND profile_policy_tests)
 
+add_executable(camera_probe_result_tests camera_probe_result_tests.cpp
+    "${DOMAIN_COMPONENT}/src/CameraProbeResult.cpp")
+target_include_directories(camera_probe_result_tests PRIVATE "${DOMAIN_COMPONENT}/include")
+target_compile_features(camera_probe_result_tests PRIVATE cxx_std_17)
+add_test(NAME camera_probe_result COMMAND camera_probe_result_tests)
+
 add_executable(provisioning_policy_tests provisioning_policy_tests.cpp
     "${DOMAIN_COMPONENT}/src/ProvisioningPolicy.cpp")
 target_include_directories(provisioning_policy_tests PRIVATE "${DOMAIN_COMPONENT}/include")
@@ -53,6 +59,14 @@ target_compile_features(network_provisioner_tests PRIVATE cxx_std_17)
 target_link_libraries(network_provisioner_tests PRIVATE Threads::Threads)
 add_test(NAME network_provisioner COMMAND network_provisioner_tests)
 
+add_executable(network_scan_service_tests network_scan_service_tests.cpp
+    "${SERVICES_COMPONENT}/src/NetworkScanService.cpp")
+target_include_directories(network_scan_service_tests PRIVATE
+    "${SERVICES_COMPONENT}/include" "${DOMAIN_COMPONENT}/include")
+target_compile_features(network_scan_service_tests PRIVATE cxx_std_17)
+target_link_libraries(network_scan_service_tests PRIVATE Threads::Threads)
+add_test(NAME network_scan_service COMMAND network_scan_service_tests)
+
 set(CAPABILITY_COMPONENT "${CMAKE_CURRENT_LIST_DIR}/../../templates/esp-idf/components/board_capabilities")
 add_executable(capability_registry_tests
     "${CAPABILITY_COMPONENT}/tests/capability_registry_host_test.cpp"
@@ -62,7 +76,7 @@ target_include_directories(capability_registry_tests PRIVATE "${CAPABILITY_COMPO
 target_compile_features(capability_registry_tests PRIVATE cxx_std_17)
 add_test(NAME capability_registry COMMAND capability_registry_tests)
 
-foreach(test_target frame_broker_tests profile_policy_tests provisioning_policy_tests wifi_credential_tests nvs_credential_store_tests network_provisioner_tests capability_registry_tests)
+foreach(test_target frame_broker_tests profile_policy_tests camera_probe_result_tests provisioning_policy_tests wifi_credential_tests nvs_credential_store_tests network_provisioner_tests network_scan_service_tests capability_registry_tests)
     if(MSVC)
         target_compile_options(${test_target} PRIVATE /W4 /WX)
     else()

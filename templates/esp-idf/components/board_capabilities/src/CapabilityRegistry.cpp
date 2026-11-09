@@ -52,6 +52,9 @@ CapabilityState CapabilityRegistry::get(Feature feature, const RuntimeState& liv
             return withHardware(board_.credentialStoragePartition,
                                 built_.credentialStorage, live.credentialStorageReady);
 
+        case Feature::Camera:
+            return withHardware(board_.camera, built_.cameraCapture, live.cameraCaptureReady);
+
         case Feature::Display:
             return withHardware(board_.display, built_.displayDriver, live.displayReady);
 
@@ -115,6 +118,7 @@ const char* CapabilityRegistry::featureKey(Feature feature) noexcept {
         case Feature::Touch: return "touch";
         case Feature::Lvgl: return "lvgl";
         case Feature::CredentialStorage: return "credential_storage";
+        case Feature::Camera: return "camera";
         case Feature::Count: break;
     }
     return "unknown";

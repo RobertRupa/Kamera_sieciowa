@@ -15,7 +15,11 @@ function applyTheme() {
 }
 watch(theme, applyTheme)
 watch(locale, value => { document.documentElement.lang = value })
-onMounted(() => { applyTheme(); media.addEventListener('change', applyTheme) })
+onMounted(() => {
+  applyTheme()
+  media.addEventListener('change', applyTheme)
+  if (!import.meta.env.DEV) void device.connect()
+})
 onUnmounted(() => media.removeEventListener('change', applyTheme))
 </script>
 

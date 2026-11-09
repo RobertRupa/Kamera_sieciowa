@@ -87,6 +87,11 @@ These are interface examples, not drop-in firmware: a real implementation must a
 | `POST /api/v1/auth/login` | public with throttling | establish session | 200/401 |
 | `POST /api/v1/auth/logout` | session | expire session | 204 |
 
+The development firmware currently exposes read-only `GET /api/v1/device/status`
+and `GET /api/v1/device/capabilities` on eligible local AP/STA addresses without
+an authenticated session. They are disabled outside `APP_DEV_MODE`, return no
+secrets, and do not replace the authenticated production contract above.
+
 Use consistent JSON envelope: success `{"data": {...}}`, failure `{"error": {"code":"invalid_ssid","message":"...","retryable":false}}`. IDs may identify asynchronous operations; no long synchronous scans in HTTP request tasks. Content type `application/json`, UTF-8, max body length, bounded JSON depth, request timeouts. Keep HTTP codes meaningful: 400 invalid input, 401 unauthenticated, 403 forbidden, 404 missing, 409 conflict/busy, 429 rate limit, 500 internal failure, 503 unavailable. Define schema/field ranges in OpenAPI (`docs/api/openapi.yaml` in actual projects); generate typed frontend client where useful.
 
 ## Event contracts

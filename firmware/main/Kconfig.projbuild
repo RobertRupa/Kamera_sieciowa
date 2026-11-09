@@ -7,6 +7,26 @@ config APP_DEV_MODE
         Camera and network startup remain blocked until hardware/security verification.
         Disable for release.
 
+config APP_CAMERA_OV5647_DRIVER
+    bool "Compile OV5647 MIPI-CSI sensor driver"
+    depends on ESP_VIDEO_ENABLE_MIPI_CSI_VIDEO_DEVICE
+    default y
+    select CAMERA_OV5647
+    help
+        Build Espressif's OV5647 driver. Sensor detection and the one-frame
+        development probe are controlled separately by APP_CAMERA_PROBE_ON_BOOT.
+
+config APP_CAMERA_PROBE_ON_BOOT
+    bool "Run a one-frame MIPI-CSI hardware probe at boot"
+    depends on APP_DEV_MODE && APP_CAMERA_OV5647_DRIVER
+    default y if APP_DEV_MODE
+    help
+        Uses the Waveshare Platform shared I2C bus (I2C_NUM_0, SDA 7, SCL 8)
+        and Espressif esp_video to identify a supported OV5647 and capture one
+        bounded frame. It uses no reset/PWDN/XCLK GPIO, stops capture before
+        network startup, and does not enable a persistent stream. Unsupported
+        sensors or an unpowered camera are reported as no supported sensor.
+
 config APP_DEV_DEFAULT_CREDENTIALS
     bool "Permit insecure development defaults"
     depends on APP_DEV_MODE

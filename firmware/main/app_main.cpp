@@ -1,5 +1,6 @@
 #include "board_support/BoardConfig.hpp"
 #include "board_capabilities/CapabilityRegistry.hpp"
+#include "camera_stream/CameraHardwareProbe.hpp"
 #include "persistence/NvsCredentialStore.hpp"
 #include "connectivity/WifiService.hpp"
 #include "connectivity/HostedProbe.hpp"
@@ -37,9 +38,27 @@ extern "C" void app_main() {
                  static_cast<unsigned int>(storeResult), esp_err_to_name(credentialStore.lastPlatformError()));
     }
     const board_support::BoardConfig board;
-    const board_capabilities::CapabilityRegistry capabilities(board.profile(), {});
+    camera_stream::CameraHardwareProbe cameraProbe;
+    const auto cameraProbeResult = cameraProbe.run();
+    ESP_LOGI("camera_hub", "camera probe=%s sensor=%s frame=%ux%u bytes=%lu",
+             camera_hub::cameraProbeStateKey(cameraProbeResult.state),
+             camera_hub::cameraSensorName(cameraProbeResult.sensor) == nullptr
+                 ? "unknown" : camera_hub::cameraSensorName(cameraProbeResult.sensor),
+             static_cast<unsigned int>(cameraProbeResult.width),
+             static_cast<unsigned int>(cameraProbeResult.height),
+             static_cast<unsigned long>(cameraProbeResult.frameBytes));
+    board_capabilities::BuildFeatures built{};
+    built.wifiAdapter = true;
+    built.wifiWizard = true;
+    built.mdns = true;
+    built.webgui = true;
+    built.credentialStorage = true;
+#if CONFIG_APP_CAMERA_OV5647_DRIVER
+    built.cameraCapture = true;
+#endif
+    const board_capabilities::CapabilityRegistry capabilities(board.profile(), built);
     const board_capabilities::RuntimeState runtime{};
-    ESP_LOGW("camera_hub", "Diagnostic foundation only: camera, UVC and IP streaming unavailable");
+    ESP_LOGW("camera_hub", "One-shot camera probe complete; persistent camera, UVC and IP streaming unavailable");
     for (std::size_t index = 0; index < board_capabilities::kFeatureCount; ++index) {
         const auto feature = static_cast<board_capabilities::Feature>(index);
         ESP_LOGI("camera_hub", "%s=%s", capabilities.featureKey(feature),
@@ -48,7 +67,8 @@ extern "C" void app_main() {
     ESP_LOGW("camera_hub", "Wi-Fi credential provisioning requires verified board and companion storage configuration");
     connectivity::WifiService wifi;
     app_services::NetworkProvisioner provisioner(credentialStore, wifi);
-    web_api::ProvisioningApi api(provisioner);
+    app_services::NetworkScanService scanService(wifi);
+    web_api::ProvisioningApi api(provisioner, scanService, board.profile(), built, cameraProbeResult);
     discovery::MdnsService mdns;
     camera_hub::ProvisioningPrerequisites prerequisites{};
     prerequisites.credentialStoreReady = credentialStore.ready();
@@ -72,6 +92,10 @@ extern "C" void app_main() {
         return;
     }
     std::int64_t deadline = 0;
+    std::int64_t scanDeadline = 0;
+    std::int64_t apStopDeadline = 0;
+    std::uint32_t scanOperationId = 0;
+    bool apStopped = false;
     if (prerequisites.companionStorageAudited) {
         const auto restoreResult = provisioner.restoreSavedCredentials();
         if (restoreResult == app_services::RestoreResult::Started) {
@@ -87,11 +111,35 @@ extern "C" void app_main() {
     const auto discoveryResult = mdns.start("camera-hub", wifi.apAddress() != 0, 80);
     if (discoveryResult != ESP_OK) ESP_LOGW("camera_hub", "mDNS start failed: %s", esp_err_to_name(discoveryResult));
     for (;;) {
-        if (provisioner.snapshot().state == app_services::ProvisioningState::Queued) {
+        if (scanService.isScanning() && scanService.operationId() != scanOperationId) {
+            scanOperationId = scanService.operationId();
+            scanDeadline = esp_timer_get_time() + 20000000;
+        }
+        scanService.processPending(scanDeadline != 0 && esp_timer_get_time() >= scanDeadline);
+        const bool scanActive = scanService.isScanning();
+        if (!scanActive) {
+            scanOperationId = 0;
+            scanDeadline = 0;
+        }
+        if (provisioner.snapshot().state == app_services::ProvisioningState::Queued &&
+            !scanActive) {
             provisioner.processPending();
             deadline = esp_timer_get_time() + 30000000;
         }
         provisioner.updateConnection(deadline != 0 && esp_timer_get_time() >= deadline);
+        if (provisioner.snapshot().state == app_services::ProvisioningState::Connected && !apStopped) {
+            if (apStopDeadline == 0) apStopDeadline = esp_timer_get_time() + 5000000;
+            if (esp_timer_get_time() >= apStopDeadline) {
+                const auto stopResult = wifi.stopAccessPoint();
+                if (stopResult == ESP_OK) {
+                    apStopped = true;
+                    ESP_LOGI("camera_hub", "Setup AP stopped; WebGUI available on STA IP %lu",
+                             static_cast<unsigned long>(provisioner.stationAddress()));
+                } else {
+                    ESP_LOGW("camera_hub", "Setup AP stop failed: %s", esp_err_to_name(stopResult));
+                }
+            }
+        }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }

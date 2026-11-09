@@ -1,52 +1,79 @@
 # Waveshare ESP32-P4-Module-DEV-KIT Pin Map
 
-## Source
+See the [peripheral integration guide](peripheral-integration.md) for ESP-IDF drivers, component choices, bring-up sequence, and unresolved board-specific details.
 
-Transcribed from the GPIO/peripheral allocation table supplied by the user in
-this conversation on 2026-11-08. The image has no visible PCB revision or source
-URL. This is reported board wiring, not a successful hardware/firmware test.
-Do not substitute the chip revision or camera UC-439 rev.B for the PCB revision.
+## Sources and Scope
 
-## Factory P4 to C6 Link
+The assignments below are transcribed from Waveshare's [GPIO allocation table](https://docs.waveshare.com/assets/images/ESP32-P4-Module-DEV-KIT-GPIO-Table-62db22ecf65136c07d4a40058d27121d.webp) for the [ESP32-P4-Module-DEV-KIT](https://docs.waveshare.com/ESP32-P4-Module-DEV-KIT). Waveshare describes the table as an allocation reference and directs readers to the [schematic](https://files.waveshare.com/wiki/ESP32-P4-Module-DEV-KIT/ESP32-P4-Module-DEV-KIT.pdf) for circuit details.
 
-| Table signal | P4 GPIO | ESP-Hosted setting |
-| --- | --- | --- |
-| C6_SDIO_D0 | 14 | ESP_HOSTED_HOST_SDIO_PIN_D0 |
-| C6_SDIO_D1 | 15 | ESP_HOSTED_HOST_SDIO_PIN_D1 |
-| C6_SDIO_D2 | 16 | ESP_HOSTED_HOST_SDIO_PIN_D2 |
-| C6_SDIO_D3 | 17 | ESP_HOSTED_HOST_SDIO_PIN_D3 |
-| C6_SDIO_CLK | 18 | ESP_HOSTED_HOST_SDIO_PIN_CLK |
-| C6_SDIO_CMD | 19 | ESP_HOSTED_HOST_SDIO_PIN_CMD |
-| C6_EN | 54 | ESP_HOSTED_HOST_RESET_GPIO (RST/EN line) |
-| C6_GPIO2 | 6 | Separate signal; NOT the reset/EN line |
+The user confirmed the base product model; the physical PCB revision and its correspondence to this documentation remain unknown. These are manufacturer-documented model-level pin assignments, not electrical measurements or peripheral bring-up results. A blank table cell means no onboard signal is listed there; it does not prove that the GPIO is available for general use. Bare `IOx` labels in the table are recorded as labels only, not as confirmation that those pins are unreserved.
 
-ESP-Hosted 3.1.0's existing configuration matches these GPIOs, with SDIO slot 1
-and a four-bit bus. Explicit defaults preserve this mapping; no different-board
-BSP is selected. SDIO frequency, pull-ups, EN/reset polarity/timing and C6
-firmware/protocol compatibility are NOT established by the table. No changes
-to those electrical settings or companion firmware are made here.
+## Manufacturer GPIO Allocation
 
-## Other Relevant Signals
+| P4 GPIO | LCD/Camera | SD Card | Audio | UART | I2C | Ethernet | KEY_IO | Other |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 |  |  |  |  |  |  |  | IO0 |
+| 1 |  |  |  |  |  |  |  | IO1 |
+| 2 |  |  |  |  |  |  |  | IO2 |
+| 3 |  |  |  |  |  |  |  | IO3 |
+| 4 |  |  |  |  |  |  |  | IO4 |
+| 5 |  |  |  |  |  |  |  | IO5 |
+| 6 |  |  |  |  |  |  |  | C6_GPIO2 |
+| 7 | DSI/CSI_SDA |  | CODEC_SDA |  | SDA |  |  |  |
+| 8 | DSI/CSI_SCL |  | CODEC_SCL |  | SCL |  |  |  |
+| 9 |  |  | I2S_DOUT |  |  |  |  |  |
+| 10 |  |  | I2S_LRCK |  |  |  |  |  |
+| 11 |  |  | I2S_DIN |  |  |  |  |  |
+| 12 |  |  | I2S_BCLK |  |  |  |  |  |
+| 13 |  |  | I2S_MCLK |  |  |  |  |  |
+| 14 |  |  |  |  |  |  |  | C6_SDIO_D0 |
+| 15 |  |  |  |  |  |  |  | C6_SDIO_D1 |
+| 16 |  |  |  |  |  |  |  | C6_SDIO_D2 |
+| 17 |  |  |  |  |  |  |  | C6_SDIO_D3 |
+| 18 |  |  |  |  |  |  |  | C6_SDIO_CLK |
+| 19 |  |  |  |  |  |  |  | C6_SDIO_CMD |
+| 20 |  |  |  |  |  |  |  | IO20 |
+| 21 |  |  |  |  |  |  |  | IO21 |
+| 22 |  |  |  |  |  |  |  | IO22 |
+| 23 |  |  |  |  |  |  |  | IO23 |
+| 24 |  |  |  |  |  |  |  | USB1P_N |
+| 25 |  |  |  |  |  |  |  | USB1P_P |
+| 26 |  |  |  |  |  |  |  | IO26 |
+| 27 |  |  |  |  |  |  |  | IO27 |
+| 28 |  |  |  |  |  | RXDV |  |  |
+| 29 |  |  |  |  |  | RXD0 |  |  |
+| 30 |  |  |  |  |  | RXD1 |  |  |
+| 31 |  |  |  |  |  | MDC |  |  |
+| 34 |  |  |  |  |  | TXD0 |  |  |
+| 35 |  |  |  |  |  | TXD1 | BOOT |  |
+| 37 |  |  |  | U0_TX |  |  |  |  |
+| 38 |  |  |  | U0_RX |  |  |  |  |
+| 39 |  |  |  |  |  |  |  | TF_D0 |
+| 40 |  |  |  |  |  |  |  | TF_D1 |
+| 41 |  |  |  |  |  |  |  | TF_D2 |
+| 42 |  |  |  |  |  |  |  | TF_D3 |
+| 43 |  |  |  |  |  |  |  | TF_CLK |
+| 44 |  |  |  |  |  |  |  | TF_CMD |
+| 45 |  |  |  |  |  |  |  | TF_PWR_CTRL |
+| 46 |  |  |  |  |  |  |  | IO46 |
+| 47 |  |  |  |  |  |  |  | IO47 |
+| 48 |  |  |  |  |  |  |  | IO48 |
+| 49 |  |  |  |  |  | TXEN |  |  |
+| 50 |  |  |  |  |  | REF_CLK |  |  |
+| 51 |  |  |  |  |  | PHY_RST |  |  |
+| 52 |  |  |  |  |  | MDIO |  |  |
+| 53 |  |  | PA_CTRL |  |  |  |  |  |
+| 54 |  |  |  |  |  |  |  | C6_EN |
+| Not a GPIO |  |  |  |  |  |  | RESET | CHIP_PU |
 
-| Function | Table signal / P4 GPIO |
-| --- | --- |
-| Camera/display shared SCCB/I2C | SDA 7, SCL 8 |
-| Ethernet RMII receive | RXDV 28, RXD0 29, RXD1 30 |
-| Ethernet management | MDC 31, MDIO 52 |
-| Ethernet transmit | TXD0 34, TXD1 35, TXEN 49 |
-| Ethernet clock/reset | REF_CLK 50, PHY_RST 51 |
-| UART0 | TX 37, RX 38 |
-| SD card | D0 39, D1 40, D2 41, D3 42, CLK 43, CMD 44, PWR_CTRL 45 |
+GPIO7/8 carry the table's display/camera, audio-codec and I2C labels on the same pins. GPIO35 is also marked BOOT in the table. Reset/CHIP_PU is shown as a separate row, not assigned a GPIO number.
 
-The table also labels GPIO24/25 as USB signal N/P. It does not establish the
-high-speed USB device connector routing or VBUS safety. Camera reset, sensor
-clock, MIPI lanes, PHY address and power sequencing are not inferred. GPIO35
-also carries the table's BOOT annotation; do not ignore strapping constraints.
+## Current Firmware Mapping
 
-## Activation Remains Blocked
+The current ESP-Hosted defaults match the manufacturer table for C6 SDIO D0-D3 on GPIO14-17, CLK on GPIO18, CMD on GPIO19 and C6_EN on GPIO54. Firmware selects SDIO slot 1 and a four-bit bus. GPIO6 is the separate C6_GPIO2 signal, not reset/EN.
 
-The manifest records the pinout source without marking Wi-Fi Ready or globally
-verified. APP_WIFI_WIRING_VERIFIED remains off pending correspondence/electrical
-checks. C6 storage audit, existing dedicated HMAC key and development AP consent
-remain separate prerequisites. No flash, erase, eFuse or network startup occurs
-as a result of this pin-map update.
+The current defaults do not configure the table's camera/display/codec I2C, I2S audio, Ethernet RMII, USB, UART0 or TF-card signals as application peripherals. The table does not establish USB routing/jumper state or VBUS safety, Ethernet PHY address and electrical timing, camera reset/XCLK/power, audio codec configuration, or the physical header wiring. Refer to the schematic and the actual PCB revision before enabling those functions.
+
+## Verification Status
+
+The user confirmed base SKU 30560. Its manufacturer GPIO allocation matches the active ESP-Hosted SDIO slot-1/four-bit configuration, and device startup observed C6 identity plus a successful RPC V2 handshake over those pins. On that evidence, `APP_WIFI_WIRING_VERIFIED` is enabled in the active local development `sdkconfig`; no bus pin or transport configuration was changed. The physical PCB revision remains unknown. This gate verifies the P4/C6 transport path only, not Wi-Fi client/IP/HTTP operation or readiness. `APP_C6_STORAGE_AUDITED` is a separate control; the local open AP also requires explicit dev-mode authorization and is not enabled in checked-in defaults or release.

@@ -23,9 +23,12 @@ At boot, after the plaintext NVS store and AP provisioning API are ready, the
 application may load the saved credential record and request a STA connection.
 This read does not rewrite credentials. A missing record leaves the AP wizard
 available; storage or driver errors fail the operation without clearing the
-record. The current composition keeps the AP up while STA connects and applies
-a 30-second connection deadline. Automatic retry/backoff and radio-level
-reboot-retention verification remain pending.
+record. The current composition applies a 30-second connection deadline and
+keeps AP+STA available during onboarding. After a confirmed STA IP, the setup AP
+is stopped after a five-second browser handoff window; the read-only WebGUI and
+status remain available at the assigned STA IP. Automatic retry/backoff remains
+pending; reboot restoration is implemented, while recurring radio persistence
+tests remain hardware work.
 
 ## mDNS
 Use `espressif/mdns` to publish sanitized configurable `<device>-<id>.local` plus `_http._tcp` and `_https._tcp` if active; TXT may include firmware/API version but never secrets. Start on IP-ready events, update on IP/interface/name change; do not assume resolution across VLANs/client isolation, expose numeric IP too.
@@ -35,3 +38,29 @@ ESP32-P4 has **no built-in Wi-Fi**: an external C6/etc companion must provide a 
 
 ## Tests
 First boot, captive detection on mobile, manual IP access, wrong password, hidden SSID, scan failure, AP client disconnect mid-write, STA loss/reconnect, NVS write failure, mDNS service resolution, network name conflict, device reboot, HTTP API authentication and memory/stack impact under UI use.
+
+## Current Implementation State
+
+The local dev wizard now has an AP-peer/origin-scoped readiness endpoint and
+authenticated asynchronous network scan and connection operations. Scans use
+Espressif's documented `esp_wifi_scan_start(..., false)` and
+`WIFI_EVENT_SCAN_DONE` lifecycle, retrieve at most 20 records, and are cancelled
+by the application worker after 20 seconds. Scan and connection operations are
+serialized so credentials are not applied while a scan is active. The main-task
+stack is explicitly sized to 8192 bytes for the remote scan result path. The Vue
+client supports scan selection, manual SSID entry and operation polling; it does not
+persist the provisioning token or Wi-Fi password.
+
+This is not yet a complete device-hosted captive wizard: the ESP-IDF component
+`nordesems/esp-captive-portal` currently does not list ESP32-P4 as a supported
+target, so this project has not enabled its DNS interception or replaced it with
+a handwritten DNS server. The Vite build is embedded as deterministic gzip
+assets and served from the same AP origin at `http://192.168.4.1/` and the
+confirmed STA IPv4. GET status/assets work on STA; provisioning mutations remain
+AP-only. Mobile captive detection, the scan path after the main-stack fix, STA
+loss/retry, and credential persistence across later reboots remain NOT RUN. The
+active local `sdkconfig`
+sets `APP_WIFI_WIRING_VERIFIED` for the user-confirmed base SKU 30560 transport
+mapping and sets `APP_DEV_OPEN_SETUP_AP` for the explicitly authorized dev/lab
+AP. Checked-in defaults remain closed; this does not authorize an open AP in
+release builds.

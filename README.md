@@ -22,9 +22,13 @@ Development foundation for one MIPI-CSI camera on a Waveshare
 ESP32-P4-Module-DEV-KIT, simultaneously exposed to a Windows computer as USB UVC
 and to the network as HTTP MJPEG and RTSP/RTP JPEG.
 
-**This is not yet a working camera appliance.** The current firmware only logs
-capability diagnostics by default. Camera capture, USB, MJPEG/RTSP, scan/reconnect,
-the admin/device-status API and complete device-side WebGUI are not implemented.
+authenticated admin API and complete device-side WebGUI are not implemented.
+**This is not yet a working camera appliance.** Development firmware returns
+read-only device status/capabilities and runs a one-frame OV5647/CSI probe at
+boot. OV5647 identification and one 800x800 CSI frame have been observed on the
+current unit. Sustained capture/streaming, IMX219, USB UVC, MJPEG/RTSP,
+scan/reconnect, authenticated admin API and complete device-side WebGUI are not
+implemented.
 The limited provisioning API and conditional AP/STA/mDNS startup are implemented
 and compiled. Ordinary NVS initializes on device; the firmware does not encrypt
 Wi-Fi credentials, and anyone with a Flash dump can recover them.
@@ -33,10 +37,11 @@ See [implementation status](docs/implementation-status.md).
 Wi-Fi update: AP/STA, plain NVS and mDNS adapters compile, as do the three
 limited provisioning endpoints. In the local dev profile, the AP starts DHCP at
 192.168.4.1 after an ESP-Hosted 3.1.0 C6/RPC V2 handshake. Windows did not detect
-the AP SSID, so client reachability remains unconfirmed. Credentials are stored
-as one plaintext P4 NVS record; no credentials have been submitted, and STA,
-HTTP-client, mDNS-resolution and reboot-persistence tests remain unrun. The
-HMAC_UP eFuse is present but unused by this firmware.
+the AP SSID; STA did acquire 192.168.69.126. Device status/capability GETs and
+the embedded WebGUI's same-origin auto-connect were verified on STA. mDNS
+resolution and credential reboot persistence remain untested; no new
+credentials were submitted during the camera probe. Credentials remain one
+plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmware.
 
 ## Implemented
 
@@ -48,8 +53,10 @@ HMAC_UP eFuse is present but unused by this firmware.
 - Vue/TypeScript/PrimeVue panel with offline/error states, capability diagnostics,
   English/Polish and system/light/dark themes. These preferences are currently
   session-local, not persisted to the device.
-- [Hardware manifest](docs/hardware/board.json) with explicit unknown pinout,
-	sensor, PCB revision and key protection. No default account or credential storage.
+- [Hardware manifest](docs/hardware/board.json) with the manufacturer GPIO
+	allocation table and model-level peripheral inventory; OV5647 ID and one CSI
+	frame are observed, while PCB revision, module revision and sustained camera
+	readiness remain explicitly unverified.
 
 ## Build and Test
 
@@ -110,12 +117,26 @@ diagnostic firmware build; it does not certify hardware or a production release.
 
 The candidate sensor is OV5647; compatibility of the actual Raspberry Pi Camera
 or Pi NoIR module and ribbon cable is unverified. The P4 has no native Wi-Fi;
-this board's vendor documents an ESP32-C6/SDIO companion and IP101GRI Ethernet.
-Camera, USB and network readiness are not inferred from those model-level facts.
-The reported C6 SDIO/EN and camera I2C GPIOs are recorded in the
-[supplied pin map](docs/hardware/pin-map.md) and manifest. They match the current
-ESP-Hosted configuration, but do not establish runtime radio/security readiness.
-Do not connect two USB hosts or use an ordinary
+Waveshare documents an ESP32-C6/SDIO companion, 16 MiB NOR Flash, 32 MiB PSRAM,
+100 Mbps RJ45 Ethernet, TF/SDIO, two-lane MIPI-CSI and MIPI-DSI, USB 2.0 OTG HS,
+onboard microphone/audio codec/amplifier, speaker connector, I2C/I3C ports and a
+reserved PoE-module interface. The DSI connector does not mean a display is
+attached; the PoE interface does not mean a PoE module is installed. These are
+model-level documentation facts, not proof of this PCB revision or operational
+peripherals. See the [manufacturer-based pin map](docs/hardware/pin-map.md) and
+[peripheral integration guide](docs/hardware/peripheral-integration.md) for the
+ESP-IDF drivers, existing component versions, bus-sharing constraints and
+bring-up requirements.
+The manufacturer also lists P4 ISP, H.264/JPEG encode, and PPA/2D-DMA/JPEG-decode
+capabilities. These silicon features do not mean the project's camera/display
+paths are implemented or that the published maximum frame rates were measured.
+
+The GPIO table assigns the C6 SDIO/EN signals used by the current ESP-Hosted
+configuration. GPIO7/8 are listed for DSI/CSI, audio codec and I2C SDA/SCL;
+firmware does not configure camera I2C. Other listed audio, Ethernet, USB, UART
+and TF signals are not currently brought up as application peripherals. Board
+revision correspondence, connector routing, electrical details and runtime
+readiness remain unverified. Do not connect two USB hosts or use an ordinary
 A-to-A cable; audit device routing, jumpers and VBUS first.
 
 First-version scope: USB MJPEG, HTTP MJPEG, RTSP/RTP JPEG, Ethernet and Wi-Fi.

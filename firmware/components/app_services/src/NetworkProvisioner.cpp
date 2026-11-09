@@ -21,6 +21,7 @@ SubmitResult NetworkProvisioner::submit(const camera_hub::WifiCredentials& crede
     if (snapshot_.state == ProvisioningState::Queued || snapshot_.state == ProvisioningState::Persisting ||
         snapshot_.state == ProvisioningState::Connecting) return SubmitResult::Busy;
     pending_ = credentials;
+    snapshot_.stationAddress = 0;
     ++snapshot_.operationId;
     if (snapshot_.operationId == 0) ++snapshot_.operationId;
     snapshot_.state = ProvisioningState::Queued;
@@ -37,6 +38,7 @@ RestoreResult NetworkProvisioner::restoreSavedCredentials() noexcept {
         if (snapshot_.state == ProvisioningState::Queued || snapshot_.state == ProvisioningState::Persisting ||
             snapshot_.state == ProvisioningState::Connecting) return RestoreResult::Busy;
         snapshot_.state = ProvisioningState::Persisting;
+        snapshot_.stationAddress = 0;
     }
 
     camera_hub::WifiCredentials credentials;
@@ -64,6 +66,7 @@ RestoreResult NetworkProvisioner::restoreSavedCredentials() noexcept {
         if (snapshot_.operationId == 0) ++snapshot_.operationId;
         snapshot_.storageError = camera_hub::CredentialError::None;
         snapshot_.wifiError = requested;
+        snapshot_.stationAddress = 0;
         snapshot_.state = requested == camera_hub::WifiError::None
             ? ProvisioningState::Connecting : ProvisioningState::Failed;
     }
@@ -98,10 +101,21 @@ void NetworkProvisioner::updateConnection(bool timedOut) noexcept {
         operationId = snapshot_.operationId;
     }
     const bool hasIp = station_.stationHasIp();
+    const auto stationAddress = hasIp ? station_.stationAddress() : 0;
     const std::lock_guard<std::mutex> lock(mutex_);
     if (snapshot_.state != ProvisioningState::Connecting || snapshot_.operationId != operationId) return;
-    if (hasIp) snapshot_.state = ProvisioningState::Connected;
-    else if (timedOut) snapshot_.state = ProvisioningState::Failed;
+    if (hasIp) {
+        snapshot_.stationAddress = stationAddress;
+        snapshot_.state = ProvisioningState::Connected;
+    } else if (timedOut) {
+        snapshot_.stationAddress = 0;
+        snapshot_.state = ProvisioningState::Failed;
+    }
+}
+
+std::uint32_t NetworkProvisioner::stationAddress() const noexcept {
+    const std::lock_guard<std::mutex> lock(mutex_);
+    return snapshot_.stationAddress;
 }
 
 ProvisioningSnapshot NetworkProvisioner::snapshot() const noexcept {

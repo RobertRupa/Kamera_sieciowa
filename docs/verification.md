@@ -1,4 +1,92 @@
 # Verification
+## Device Status Firmware Flash and Camera Report
+
+2026-11-09: the first probe identified OV5647 but failed video-buffer allocation
+because PSRAM was disabled. Enabled the ESP-IDF `esp32p4` capture example's
+PSRAM profile (`SPIRAM`, 200 MHz) in the active local `sdkconfig` and project
+defaults, preserving the existing pre-v3 / 360 MHz CPU configuration. Rebuilt
+and incrementally flashed `/dev/ttyACM0`; no full erase or eFuse operation ran.
+
+PASS: boot log detected 32 MiB PSRAM at 200 MHz, verified the PSRAM memory test,
+read OV5647 PID `0x5647`, and captured one MIPI-CSI frame at `800x800`,
+`1,280,000` bytes. `esp_video` then stopped capture and deinitialized before
+network startup. The status route returned `camera_probe_state=frame_captured`,
+`camera_hardware.sensor=OV5647`, and `camera=null`; direct HTTP GET returned
+200. `camera=null` is expected because this is a one-frame probe, not a
+persistent stream.
+
+PASS: the same boot initialized C6 over four-bit SDIO, negotiated RPC V2 with
+matching ESP-Hosted 3.1.0 versions, started AP DHCP at `192.168.4.1`, restored
+the previously stored station network, and acquired STA IP `192.168.69.126`.
+The capability endpoint returned 200 with `camera=unverified`; exact PCB
+revision and sustained capture remain unverified despite the one-frame test.
+USB UVC and Ethernet are unverified; HTTP MJPEG and RTSP are disabled.
+
+PASS: the embedded WebGUI loaded from the STA origin, auto-connected to that
+same origin, and displayed `OV5647`, “One CSI frame received”, and “No active
+capture”. No browser CORS error occurred after the same-origin auto-connect fix.
+
+NOT VERIFIED: the user-reported `UC-439` module/revision was not identified by
+firmware; only its OV5647 sensor was detected. IMX219 is not supported by the
+resolved driver. The physical Waveshare PCB revision, ribbon orientation, and
+sustained capture remain unverified. No USB, HTTP stream, or RTSP media path was
+started.
+
+## Wi-Fi Scan and AP-to-STA WebGUI Update
+
+2026-11-09: added an AP-peer/origin-scoped provisioning readiness endpoint,
+Espressif `esp_wifi` asynchronous scan adapter, a 20-result scan operation with a
+20-second cancellation deadline, and Vue scan/connection polling. Credential
+operations wait until an active scan completes. A scan triggered main-task
+stack overflow with the default 3584-byte stack; scan result collection now uses
+the service-owned buffer and the main task stack is set to 8192 bytes. The AP is
+stopped five seconds after station IP confirmation. The gzip Vue GUI and
+read-only status route accept AP or STA addresses; session/scan/credential
+operations remain AP-only. The active local dev `sdkconfig` enables the
+explicitly authorized open AP and verified base-SKU transport gates;
+`sdkconfig.defaults` remains closed. Plaintext-NVS policy is unchanged.
+
+PASS: ESP-IDF 6.1.0 `esp32p4` incremental build. Latest flashed
+`camera_hub.bin` size is `0x15DA30`; 83% of the 8 MiB app partition remains free.
+The build reports existing ESP-Hosted `TINYUSB_NET_MODE` Kconfig warnings.
+
+PASS: Web TypeScript check, Vitest 15/15, production Vite build and Playwright
+24/24 across desktop, mobile and small-mobile profiles. The Vite build reports
+a JavaScript chunk above 500 kB. Full host CTest 8/8 passes, including station-IP
+propagation, scan timeout/cancellation and bounded-result handling.
+
+PASS: Read-only `esptool chip_id` identified ESP32-P4 revision 1.3 on
+`/dev/ttyACM0`. After the user confirmed Waveshare base SKU 30560, the active
+local `sdkconfig` enabled `APP_WIFI_WIRING_VERIFIED` and the explicitly
+authorized `APP_DEV_OPEN_SETUP_AP`; `sdkconfig.defaults` remains closed. The C6
+transport gate is based on the manufacturer's base-model SDIO GPIO table plus
+the previously observed live P4/C6 RPC V2 handshake and matching ESP-Hosted
+3.1.0 versions.
+
+PASS: Incremental flash with
+`idf.py -B /tmp/camera-hub-idf61 -D SDKCONFIG=/home/konatsu/Documents/justyna/Kamera_sieciowa/firmware/sdkconfig -p /dev/ttyACM0 flash`
+using ESP-IDF 6.1 / esptool 5.6.0. Only changed sectors in the bootloader and
+application were rewritten; partition table and OTA data were unchanged. Built-in
+image hash verification passed. No full-chip erase or eFuse operation was run.
+
+PASS: Serial startup reported ESP-IDF 6.1, P4 rev.1.3, C6 over four-bit SDIO,
+RPC V2 with matching host/coproc 3.1.0, AP `CAMERA-HUB-SETUP`, DHCP at
+`192.168.4.1`, restore of the stored `domowa` network, STA IP `192.168.69.126`,
+and AP shutdown after five seconds.
+
+PASS: From a host on the STA subnet, GET `/api/v1/provisioning/status` returned
+200 with valid JSON, `station_ip: "192.168.69.126"`, and
+`provisioning_available: false`. GET `/`, the current Vite JS asset, and its CSS
+asset each returned 200 with gzip encoding.
+
+NOT RUN: The scan path has not yet been rerun on hardware after increasing the
+main-task stack; no scan-result list or credential submission is claimed for
+the final image. Phone-side visual rendering and submission remain unverified.
+Captive DNS was not enabled because the inspected component omits ESP32-P4 from
+supported targets. Credentials were not entered during the final verification;
+the previously stored `domowa` record was restored on boot. No full erase or
+eFuse operation was performed.
+
 ## Plaintext NVS Wi-Fi Build and Hardware Run
 
 2026-11-09: replaced the encrypted credential adapter with ordinary NVS in
@@ -187,19 +275,18 @@ No eFuse programming has yet been executed: deferred until startup/transport can
 be verified. Last read showed all six key purposes USER/EMPTY, Flash Encryption
 and Secure Boot disabled. No credentials or network readiness were invented.
 
-## Supplied Pin Map
+## Manufacturer GPIO Allocation Table
 
-2026-11-08: the user supplied a GPIO allocation image. Transcribed SDIO D0..D3
-14..17, CLK18, CMD19 and C6_EN54 into the manifest and explicit defaults. GPIO6
-is C6_GPIO2, not reset. Shared camera I2C is SDA7/SCL8 and PHY reset is GPIO51.
-Source/provenance and remaining electrical uncertainty are recorded in
-hardware/pin-map.md; the image has no visible PCB revision.
+2026-11-09: transcribed the [Waveshare GPIO allocation table](https://docs.waveshare.com/assets/images/ESP32-P4-Module-DEV-KIT-GPIO-Table-62db22ecf65136c07d4a40058d27121d.webp) and product description into `docs/hardware/pin-map.md` and `docs/hardware/board.json`. The table documents C6 SDIO D0..D3 on GPIO14..17, CLK18, CMD19, C6_EN54 and separate C6_GPIO2 on GPIO6; shared DSI/CSI, codec and I2C labels on GPIO7/8; I2S audio GPIO9..13; USB GPIO24/25; RMII Ethernet; UART0 GPIO37/38; TF GPIO39..45; and audio PA_CTRL GPIO53. The product page additionally documents model-level MIPI-CSI/DSI, USB OTG HS, Ethernet, TF/SDIO, audio and board connectors.
 
-PASS: PowerShell structured checks against build/p4/config/sdkconfig.json verified
-all six SDIO signals, EN, slot1 and four-bit width. Manifest EN matched GPIO54.
-Automatic ESP-Hosted startup and wiring/C6-storage audit flags remained off.
-This checked the existing successful build configuration; no new target build,
-flash, eFuse programming or hardware/network test was executed for this update.
+This replaces user-image provenance, not hardware verification. The physical PCB revision and correspondence to the manufacturer's schematic remain unknown. The pin table does not establish electrical behavior, connector routing or peripheral runtime operation.
+
+PASS: Existing ESP-Hosted defaults match the manufacturer's C6 SDIO D0..D3,
+CLK, CMD and EN assignments; slot 1 and four-bit width are selected. GPIO6 is
+not configured as reset. Automatic ESP-Hosted startup and the wiring verification
+gate remain off. This is a source/configuration comparison only; no new target
+build, flash, eFuse programming or hardware/peripheral test was executed for this
+documentation update.
 
 ## Provisioning and STA Integration
 

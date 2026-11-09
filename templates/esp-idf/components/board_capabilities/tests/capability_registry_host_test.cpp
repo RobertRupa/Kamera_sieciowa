@@ -21,12 +21,14 @@ int main() {
     compiled.touchDriver = true;
     compiled.lvgl = true;
     compiled.credentialStorage = true;
+    compiled.cameraCapture = true;
     RuntimeState runtime{};
 
     CapabilityRegistry unknown(example, compiled);
     assert(unknown.get(Feature::Wifi, runtime) == CapabilityState::Unverified);
     assert(unknown.get(Feature::Display, runtime) == CapabilityState::Unverified);
     assert(unknown.get(Feature::CredentialStorage, runtime) == CapabilityState::Unverified);
+    assert(unknown.get(Feature::Camera, runtime) == CapabilityState::Unverified);
     assert(unknown.get(Feature::WifiWizard, runtime) == CapabilityState::Unverified);
 
     // Simulation of an independently confirmed board, not actual hardware verification.
@@ -35,9 +37,11 @@ int main() {
     verified.display = Verification::Verified;
     verified.touch = Verification::Verified;
     verified.credentialStoragePartition = Verification::Verified;
+    verified.camera = Verification::Verified;
     CapabilityRegistry registry(verified, compiled);
 
     assert(registry.get(Feature::Wifi, runtime) == CapabilityState::NotReady);
+    assert(registry.get(Feature::Camera, runtime) == CapabilityState::NotReady);
     assert(registry.get(Feature::WebGui, runtime) == CapabilityState::NotReady);
     runtime.wifiLinkReady = true;
     assert(registry.get(Feature::Wifi, runtime) == CapabilityState::Ready);
@@ -69,11 +73,14 @@ int main() {
     assert(registry.get(Feature::Touch, runtime) == CapabilityState::NotReady);
     runtime.touchReady = true;
     assert(registry.get(Feature::Touch, runtime) == CapabilityState::Ready);
+    runtime.cameraCaptureReady = true;
+    assert(registry.get(Feature::Camera, runtime) == CapabilityState::Ready);
 
     const auto snap = registry.snapshot(runtime);
     for (const auto state : snap) assert(state == CapabilityState::Ready);
     assert(std::strcmp(CapabilityRegistry::featureKey(Feature::WifiWizard),
                        "wifi_wizard") == 0);
+    assert(std::strcmp(CapabilityRegistry::featureKey(Feature::Camera), "camera") == 0);
     assert(std::strcmp(CapabilityRegistry::stateKey(CapabilityState::NotReady),
                        "not_ready") == 0);
 
