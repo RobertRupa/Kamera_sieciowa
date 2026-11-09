@@ -1,11 +1,23 @@
 {
   "idf.extensionActivationMode": "always",
   "idf.flashType": "UART",
-  "idf.port": "detect",
+  "idf.port": "/dev/ttyACM0",
   "idf.buildPath": "${workspaceFolder}/build",
   "idf.sdkconfigDefaults": [
     "${workspaceFolder}/sdkconfig.defaults"
   ],
   "idf.saveBeforeBuild": true,
-  "idf.preBuildTask": "python ../scripts/prepare_web_assets.py"
+  "idf.preBuildTask": "python ../scripts/prepare_web_assets.py",
+  "idf.currentSetup": "/home/konatsu/.espressif/v6.1/esp-idf",
+  "idf.openOcdConfigs": [
+    "board/esp32p4-ftdi.cfg"
+  ],
+  "idf.customExtraVars": {},
+  "clangd.path": "/home/konatsu/.espressif/tools/esp-clangd/esp-21.1.3_20260408/esp-clangd/bin/clangd",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=/home/konatsu/Documents/justyna/Kamera_sieciowa/firmware/build/default"
+  ],
+  "idf.monitorPort": "/dev/ttyACM0"
 }
