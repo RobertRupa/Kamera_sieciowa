@@ -26,6 +26,15 @@ export const useDeviceStore = defineStore('device', () => {
     return url.toString()
   })
   function state(feature: string) { return capabilities.value?.capabilities[feature] ?? 'unknown' }
+  async function refreshStatus() {
+    const [deviceStatus, deviceCapabilities] = await Promise.all([
+      getDeviceResource(base.value, '/api/v1/device/status', statusSchema),
+      getDeviceResource(base.value, '/api/v1/device/capabilities', capabilitiesSchema),
+    ])
+    status.value = deviceStatus.data
+    capabilities.value = deviceCapabilities.data
+    streamError.value = false
+  }
   async function connect() {
     if (pending.value) return
     status.value = null
@@ -35,12 +44,7 @@ export const useDeviceStore = defineStore('device', () => {
     pending.value = true
     try {
       base.value = normalizeDeviceUrl(address.value)
-      const [deviceStatus, deviceCapabilities] = await Promise.all([
-        getDeviceResource(base.value, '/api/v1/device/status', statusSchema),
-        getDeviceResource(base.value, '/api/v1/device/capabilities', capabilitiesSchema),
-      ])
-      status.value = deviceStatus.data
-      capabilities.value = deviceCapabilities.data
+      await refreshStatus()
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : ''
       error.value = ['invalid_address', 'unauthorized'].includes(code) ? code : 'device_unavailable'
@@ -48,5 +52,5 @@ export const useDeviceStore = defineStore('device', () => {
       pending.value = false
     }
   }
-  return { reportedCamera, address, base, status, capabilities, pending, error, connected, streamError, streamUrl, state, connect }
+  return { reportedCamera, address, base, status, capabilities, pending, error, connected, streamError, streamUrl, state, connect, refreshStatus }
 })

@@ -1,4 +1,141 @@
 # Verification
+## All OV5647 Modes and Lower-Latency UDP
+
+2026-11-09: enabled all five modes in resolved esp_cam_sensor 2.6.0 without
+changing managed sources or inventing sensor registers. Increased the bounded
+RGB565 capture allowance to 5 MiB per buffer, including portrait dimensions.
+Default remains 800x800; preview FPS remains an encoding/publication cap of 20.
+
+PASS: actual enumeration and sensor switching, then two FFmpeg-decoded MJPEG
+frames at each requested resolution:
+
+| Driver ID | Sensor mode | Captured/decoded dimensions |
+| --- | --- | --- |
+| 0 | RAW8, 50 sensor FPS | 800x1280 |
+| 1 | RAW8, 50 sensor FPS | 800x640 |
+| 2 | RAW8, 50 sensor FPS (default) | 800x800 |
+| 3 | RAW10, 30 sensor FPS | 1920x1080 |
+| 4 | RAW10 binning, 45 sensor FPS | 1280x960 |
+
+PASS: all five also decoded three frames over direct RTP/SDP in short tests:
+the RAW8 modes used 10 preview FPS / quality 70; RAW10 modes used quality 40.
+1080p quality 70 exceeded the 256 KiB RTP frame cap and was counted/dropped.
+The cap remains deliberate; no guarantee that every quality/scene fits is made.
+
+RTP now atomically selects the newest broker frame and releases/counts skipped
+references without affecting HTTP or held leases. Frames older than 100 ms at
+dequeue are dropped. Direct UDP uses 500 microseconds per four-packet burst
+instead of the old one-tick wait (10 ms with the active 100 Hz FreeRTOS tick).
+The RTSP library's own session pacing is unchanged. GUI telemetry polls once per
+second while direct UDP is active, with at most one request in flight.
+
+PASS: final paced build decoded three 800x640 frames at 20 preview FPS / quality
+50 without decoder errors. Last sampled sender timings were 7,808 us from
+encode start to RTP dequeue and 4,159 us for direct packetization/send; sampled
+maxima were 17,629 us and 15,787 us respectively. These are sender-side counters,
+NOT measured glass-to-glass latency or a measured before/after comparison.
+
+PASS WITH LOSS: final paced 1920x1080 / 5 preview FPS / quality 40 decoded three
+frames but FFmpeg reported missing packets/dropped frames. Last sampled timings
+were 37,368 us age and 84,453 us send; maximum send time was 90,507 us. The sender
+reported zero send errors/stale/oversized frames for these final tests, which
+does not imply loss-free delivery. Default RTSP/UDP decoded three 800x800 frames
+without errors afterward. The default 800x800 / 20 FPS / quality 80 was restored
+and direct UDP disabled.
+
+PASS: ESP-IDF 6.1/P4 incremental build/flash on `/dev/ttyACM0`, final image
+`0x1de6a0` bytes with 77% application partition free and normal image-integrity
+checks. CTest 9/9, frontend typecheck, Vitest 17/17 and Playwright 27/27 passed.
+Tests cover all five selectable modes, over-budget rejection, latest-frame lease
+ownership/concurrency, and live timing polling. The freshly reloaded embedded
+GUI showed five actual mode options and decoded 800x800, without viewport overflow.
+
+NOT VERIFIED: long-duration endurance, all quality/scene combinations, actual
+sensor-delivered FPS measurements, receiver caching defaults or end-to-end delay.
+No GPIO, partition, Wi-Fi credential, eFuse or full-erase change was made.
+Board-level camera capability remains `unverified`; sensor support is limited to
+the five implemented upstream formats, not every datasheet mode of OV5647.
+
+## Driver Configuration and UDP Deployment
+
+2026-11-09: implemented a bounded camera inventory, driver-derived modes,
+authenticated runtime settings, per-camera stream links, and brokered RTP/JPEG
+UDP with managed `espp/rtsp` 1.4.2. Manufacturer documentation confirms one CSI
+camera connector and one DSI display connector. No second camera was attached;
+simultaneous multi-sensor capture is BLOCKED on an additional verified input,
+not implemented by treating DSI as a camera port.
+
+PASS: ESP-IDF 6.1/P4 incremental build and flash to `/dev/ttyACM0`, final image
+`0x1ddab0` bytes (77% of the application partition free). Normal image integrity
+checks passed. No full erase, Wi-Fi credential write, partition or eFuse change
+was performed. The active local configuration explicitly enables the dev-only
+`admin/admin` camera login; checked-in defaults keep it disabled.
+
+PASS: the deployed driver enumerated one actual sensor mode,
+`MIPI_2lane_24Minput_RAW8_800x800_50fps`. Unauthorized PATCH returned 401;
+unknown mode, fractional JPEG quality and odd UDP port returned 400. A valid
+10 FPS / quality 70 request returned 202 and reached Applied after capture.
+The embedded GUI also applied 12 FPS / quality 60 and updated the status panel.
+The original preview settings (20 FPS / quality 80) were restored; direct UDP
+was disabled and the test sessions were closed.
+
+PASS: FFmpeg decoded three frames each over direct RTP/UDP + downloaded SDP,
+RTSP-negotiated RTP/UDP, and HTTP MJPEG while all three receivers ran
+simultaneously. The direct UDP status reported 22 frames sent, zero oversized
+frames and zero send errors in that test. The receivers logged dropped partial
+UDP frames while joining/receiving; UDP is best-effort and no loss-free or
+fixed delivered-FPS guarantee is claimed. Three additional consecutive RTSP
+connections each decoded three frames. Initial protocol checks exposed optional
+JPEG APP/COM metadata rejected by the upstream parser; a bounded header adapter
+and scan-only RTP payload resolved JPEG compatibility without modifying managed
+component sources.
+
+PASS: the final embedded GUI decoded 800x800 and displayed actual MJPEG and
+RTSP links. After enabling HTTP LRU eviction and a six-client API budget, a
+second client read inventory, configuration, UDP status and device status with
+HTTP 200 while the browser's MJPEG preview remained active. Platform sockets
+are capped at 16; the direct UDP worker checks allocation before reporting Ready.
+
+PASS: CTest 9/9, frontend typecheck, Vitest 17/17 and Playwright 27/27. The new
+configuration scenario also passed its focused rerun on desktop, mobile and
+320-pixel profiles after the final link change. The Vite build retains its
+existing >500 kB chunk warning. Host tests cover settings bounds and truncated
+JPEG metadata; browser tests cover disabled modes, token-bearing writes, applied
+state, UDP/SDP controls, locale parity and responsive overflow.
+
+NOT RUN: switching to another real sensor mode (only one is compiled/reported),
+physical second-camera capture, long-duration/packet-loss endurance, 900-second
+expiry and forced hardware rollback fault injection, or production/release
+certification. Camera settings are runtime-only and not persisted to NVS.
+`camera=unverified` remains correct for unresolved PCB/revision/endurance facts.
+
+## Persistent OV5647 WebGUI Preview
+
+2026-11-09: enabled persistent preview after the successful one-frame OV5647
+probe. The producer captures RGB565 through `esp_video`, encodes with the P4
+hardware JPEG engine only while subscribed, publishes through a bounded 10 MiB
+PSRAM `FrameBroker`, and caps the preview at 20 FPS. Port 81 serves
+`/stream.mjpg`; the API and embedded WebGUI remain on port 80.
+
+PASS: ESP-IDF 6.1 `esp32p4` build and incremental flash to `/dev/ttyACM0`.
+UART reported OV5647 PID `0x5647`, one 800x800 CSI frame, and persistent capture
+started at 800x800/20 FPS. No full erase or eFuse operation was performed.
+
+PASS: GET `/api/v1/device/status` reported `camera_probe_state=frame_captured`,
+`camera={width:800,height:800,fps:20}`, and `camera_hardware.sensor=OV5647`.
+GET `/api/v1/device/capabilities` reported `http_mjpeg=ready` and
+`camera=unverified`.
+
+PASS: port 81 returned HTTP 200 with `multipart/x-mixed-replace`. A captured
+frame was a valid 800x800 JPEG; the embedded browser reported
+`naturalWidth=800`, `naturalHeight=800`. UART logged a client disconnect when
+the bounded curl sample ended; no JPEG encoder or frame-broker error was logged.
+
+NOT VERIFIED: long-duration capture endurance, exact Waveshare PCB/camera-lane
+revision, and UC-439 module revision. The camera capability therefore remains
+`unverified`; USB UVC and RTSP/RTP are not implemented. No credentials, NVS
+erase, or eFuse changes were made.
+
 ## Device Status Firmware Flash and Camera Report
 
 2026-11-09: the first probe identified OV5647 but failed video-buffer allocation

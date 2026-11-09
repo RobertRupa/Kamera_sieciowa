@@ -1,5 +1,83 @@
 import { expect, test } from '@playwright/test'
 
+test('camera configuration uses driver modes, authenticated writes and stream links', async ({ page }, info) => {
+  const token = 'a'.repeat(64)
+  let settings = { mode_id: 0, preview_fps: 20, jpeg_quality: 80 }
+  let enabled = false
+  let port = 5004
+  let activeUdpReads = 0
+  await page.route('**/api/v1/device/**', route => route.fulfill({ json: { data:
+    route.request().url().endsWith('/status')
+      ? { firmware_version: 'fixture', uptime_seconds: 1, free_heap_bytes: 100,
+          camera: { width: 800, height: 800, fps: settings.preview_fps },
+          camera_hardware: { sensor: 'OV5647', module: null, module_revision: null } }
+      : { board_id: 'fixture', target: 'esp32p4', capabilities: { http_mjpeg: 'not_ready', rtsp: 'ready' } },
+  } }))
+  await page.route('**/api/v1/cameras', route => route.fulfill({ json: { data: {
+    simultaneous_csi_inputs: 1, development_login: true,
+    cameras: [{ id: 'csi-0', sensor: 'OV5647', interface: 'MIPI-CSI', capturing: true,
+      mjpeg_path: '/stream.mjpg', mjpeg_port: 81, rtsp_path: '/cameras/csi-0', rtsp_port: 8554 }],
+  } } }))
+  await page.route('**/api/v1/camera/session', route => {
+    expect(route.request().postDataJSON()).toEqual({ username: 'admin', password: 'admin' })
+    return route.fulfill({ json: { data: { token, expires_in_seconds: 900 } } })
+  })
+  await page.route('**/api/v1/cameras/csi-0**', route => {
+    const request = route.request()
+    if (request.method() !== 'GET') expect(request.headers().authorization).toBe(`Bearer ${token}`)
+    if (request.url().endsWith('/udp')) {
+      if (request.method() === 'GET' && enabled) ++activeUdpReads
+      if (request.method() === 'PUT') ({ enabled, port } = request.postDataJSON())
+      return route.fulfill({ json: { data: { ready: true, enabled, port, receiver: '192.168.1.10',
+        frames_sent: 0, oversized_frames: 0, send_errors: 0,
+        last_frame_age_us: 5000, last_send_duration_us: 8000 } } })
+    }
+    if (request.method() === 'PATCH') settings = request.postDataJSON()
+    return route.fulfill({ status: request.method() === 'PATCH' ? 202 : 200, json: { data: {
+      persistent: false, state: request.method() === 'PATCH' ? 'queued' : 'applied', settings,
+      modes: [
+        { id: 0, name: 'driver mode', width: 800, height: 800, sensor_fps: 50, available: true },
+        { id: 1, name: 'driver mode WVGA', width: 800, height: 640, sensor_fps: 50, available: true },
+        { id: 2, name: 'driver mode portrait', width: 800, height: 1280, sensor_fps: 50, available: true },
+        { id: 3, name: 'driver mode FHD', width: 1920, height: 1080, sensor_fps: 30, available: true },
+        { id: 4, name: 'driver mode binning', width: 1280, height: 960, sensor_fps: 45, available: true },
+        { id: 5, name: 'over budget fixture', width: 1920, height: 1920, sensor_fps: 30, available: false },
+      ],
+    } } })
+  })
+  await page.goto('/')
+  await page.getByLabel('Device address', { exact: true }).fill('http://127.0.0.1:4173')
+  await page.getByRole('button', { name: 'Connect', exact: true }).click()
+  const controls = page.getByRole('region', { name: 'Camera configuration', exact: true })
+  await expect(controls.getByText('Development firmware / insecure default password')).toBeVisible()
+  await expect(controls.getByRole('button', { name: 'Apply camera settings' })).toBeDisabled()
+  await expect(controls.getByRole('link', { name: 'RTSP / UDP' })).toHaveAttribute('href', 'rtsp://127.0.0.1:8554/cameras/csi-0')
+  await controls.getByLabel('Password', { exact: true }).fill('admin')
+  await controls.getByRole('button', { name: 'Sign in', exact: true }).click()
+  await controls.getByRole('combobox', { name: 'Sensor mode', exact: true }).click()
+  for (const mode of ['800 × 640 · 50 FPS', '800 × 800 · 50 FPS', '800 × 1280 · 50 FPS',
+    '1920 × 1080 · 30 FPS', '1280 × 960 · 45 FPS']) {
+    await expect(page.getByRole('option', { name: mode, exact: true })).toBeEnabled()
+  }
+  await expect(page.getByRole('option', { name: '1920 × 1920 · 30 FPS', exact: true })).toBeDisabled()
+  await page.keyboard.press('Escape')
+  await controls.getByLabel('Preview FPS', { exact: true }).fill('10')
+  await controls.getByLabel('JPEG quality', { exact: true }).fill('70')
+  await controls.getByRole('button', { name: 'Apply camera settings' }).click()
+  await expect(controls.getByText('Camera configuration applied', { exact: true })).toBeVisible()
+  expect(settings).toEqual({ mode_id: 0, preview_fps: 10, jpeg_quality: 70 })
+  await controls.getByRole('switch', { name: 'RTP / UDP', exact: true }).check()
+  await controls.getByRole('button', { name: 'Apply UDP settings' }).click()
+  await expect(controls.getByRole('link', { name: 'SDP', exact: true })).toBeVisible()
+  expect(enabled).toBe(true)
+  await expect.poll(() => activeUdpReads).toBeGreaterThan(0)
+  await expect(controls.getByText('5.0 ms', { exact: true })).toBeVisible()
+  await expect(controls.getByText('8.0 ms', { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(token)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: `test-results/camera-settings-${info.project.name}.png`, fullPage: true })
+})
+
 test('offline dashboard, preferences and failures', async ({ page }, info) => {
   await page.route('http://camera-hub.local/**', route => route.abort())
   await page.goto('/')

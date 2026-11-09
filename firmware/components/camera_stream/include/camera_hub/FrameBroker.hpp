@@ -36,6 +36,7 @@ public:
     [[nodiscard]] PublishResult publish(const std::uint8_t* jpeg, std::size_t size,
                                         std::uint64_t timestampUs) noexcept;
     [[nodiscard]] FrameLease tryTake(Output output) noexcept;
+    [[nodiscard]] FrameLease tryTakeLatest(Output output) noexcept;
     [[nodiscard]] StreamStats stats() const noexcept;
 
 private:
@@ -52,6 +53,7 @@ private:
     };
     void release(std::size_t slot) noexcept;
     void dropFront(Queue& queue) noexcept;
+    [[nodiscard]] FrameLease take(Output output, bool latest) noexcept;
     std::uint8_t* storage_;
     std::size_t maxFrameBytes_;
     bool valid_;

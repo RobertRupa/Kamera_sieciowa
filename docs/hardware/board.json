@@ -49,6 +49,8 @@
     "verification": "unverified",
     "interface": "MIPI-CSI",
     "lanes": 2,
+    "simultaneous_csi_inputs": 1,
+    "other_ribbon_connector": "MIPI-DSI display output, not a second camera input",
     "source": "https://docs.waveshare.com/ESP32-P4-Module-DEV-KIT",
     "module": "UC-439",
     "module_revision": "B",
@@ -57,6 +59,13 @@
     "candidate_sensor": "OV5647",
     "actual_sensor": "OV5647",
     "supported_profiles": [],
+    "runtime_driver_modes": [
+      {"width": 800, "height": 1280, "sensor_fps": 50, "format": "RAW8"},
+      {"width": 800, "height": 640, "sensor_fps": 50, "format": "RAW8"},
+      {"width": 800, "height": 800, "sensor_fps": 50, "format": "RAW8"},
+      {"width": 1920, "height": 1080, "sensor_fps": 30, "format": "RAW10"},
+      {"width": 1280, "height": 960, "sensor_fps": 45, "format": "RAW10 binning"}
+    ],
     "last_probe": {
       "date": "2026-11-09",
       "sensor_id": "0x5647",
@@ -68,7 +77,7 @@
       "capture_duration_frames": 1,
       "source": "docs/verification.md#device-status-firmware-flash-and-camera-report"
     },
-    "notes": "Runtime probe identified OV5647 PID 0x5647 and captured one 800x800 CSI frame on the current unit. UC-439 rev.B remains user-reported module identity; PCB revision, ribbon orientation and sustained capture are not verified."
+    "notes": "Runtime probe identified OV5647 PID 0x5647. All five resolved-driver modes were enumerated, switched and decoded on this unit; runtime_driver_modes records short smoke evidence, not release readiness. Default is 800x800; preview is capped at 20 FPS. Large-mode UDP JPEGs may require lower quality to fit the 256 KiB transport cap. Manufacturer documentation identifies one CSI camera input and one DSI display output. No second camera is attached or verified. UC-439 rev.B remains user-reported; PCB revision, ribbon orientation and long-duration endurance remain unverified."
   },
   "usb": {
     "verification": "unverified",

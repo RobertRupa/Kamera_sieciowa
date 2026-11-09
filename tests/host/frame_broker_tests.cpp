@@ -64,6 +64,26 @@ int main() {
     oldHttp.reset();
     newHttp.reset();
 
+    {
+        std::array<std::uint8_t, FrameBroker::slotCount * 16> latestStorage{};
+        FrameBroker latestBroker(latestStorage.data(), latestStorage.size(), 16);
+        latestBroker.setEnabled(Output::Rtsp, true);
+        latestBroker.setEnabled(Output::Http, true);
+        require(latestBroker.publish(jpeg.data(), jpeg.size(), 1) == PublishResult::Published, "first latest frame");
+        require(latestBroker.publish(jpeg.data(), jpeg.size(), 2) == PublishResult::Published, "second latest frame");
+        auto latest = latestBroker.tryTakeLatest(Output::Rtsp);
+        require(latest.timestampUs() == 2, "RTP selects newest queued frame");
+        require(latestBroker.stats().dropped[2] == 1, "stale RTP reference counted and released");
+        auto oldestHttp = latestBroker.tryTake(Output::Http);
+        require(oldestHttp.timestampUs() == 1, "latest RTP does not alter HTTP FIFO");
+        latestBroker.setEnabled(Output::Http, false);
+        require(latest.data()[0] == 0xff, "latest lease survives clearing another output");
+        oldestHttp.reset();
+        latest.reset();
+        require(latestBroker.stats().occupiedSlots == 0, "latest selection releases all slots");
+        require(!latestBroker.tryTakeLatest(Output::Count), "invalid latest output rejected");
+    }
+
     std::array<FrameLease, FrameBroker::slotCount> held{};
     broker.setEnabled(Output::Http, false);
     broker.setEnabled(Output::Rtsp, false);
@@ -106,7 +126,7 @@ int main() {
         consumers[index] = std::thread([&, index, output] {
             std::uint64_t previousTimestamp = 0;
             while (!finished.load() || broker.stats().queued[index] != 0) {
-                auto frame = broker.tryTake(output);
+                auto frame = output == Output::Rtsp ? broker.tryTakeLatest(output) : broker.tryTake(output);
                 if (frame) {
                     require(frame.timestampUs() > previousTimestamp, "monotonic consumer timestamps");
                     require(frame.size() == jpeg.size() &&

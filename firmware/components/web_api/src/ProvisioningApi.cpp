@@ -115,7 +115,8 @@ char* serializeScanSnapshot(const app_services::NetworkScanSnapshot& snapshot) {
 
 char* serializeDeviceCapabilities(const board_capabilities::BoardProfile& board,
                                   const board_capabilities::CapabilityRegistry& registry,
-                                  const board_capabilities::RuntimeState& runtime) {
+                                  const board_capabilities::RuntimeState& runtime,
+                                  bool httpMjpegReady, bool rtspReady) {
     cJSON* root = cJSON_CreateObject();
     if (root == nullptr) return nullptr;
     cJSON* data = cJSON_AddObjectToObject(root, "data");
@@ -143,7 +144,10 @@ char* serializeDeviceCapabilities(const board_capabilities::BoardProfile& board,
         {"ethernet", "unverified"},
     }};
     for (const auto& output : outputs) {
-        if (cJSON_AddStringToObject(capabilities, output.first, output.second) == nullptr) {
+        const char* state = std::strcmp(output.first, "http_mjpeg") == 0 && httpMjpegReady
+            ? "ready" : output.second;
+        if (std::strcmp(output.first, "rtsp") == 0 && rtspReady) state = "ready";
+        if (cJSON_AddStringToObject(capabilities, output.first, state) == nullptr) {
             cJSON_Delete(root);
             return nullptr;
         }
@@ -160,9 +164,12 @@ ProvisioningApi::ProvisioningApi(app_services::NetworkProvisioner& provisioner,
                                  app_services::NetworkScanService& scanService,
                                  board_capabilities::BoardProfile board,
                                                                  board_capabilities::BuildFeatures built,
-                                                                 camera_hub::CameraProbeResult cameraProbe) noexcept
+                                                                 camera_hub::CameraProbeResult cameraProbe,
+                                                                 camera_stream::CameraHardwareProbe& cameraStream,
+                                                                 camera_stream::CameraNetworkStream& networkStream) noexcept
     : provisioner_(provisioner), scanService_(scanService), board_(board), built_(built),
-            capabilities_(board_, built_), cameraProbe_(cameraProbe) {}
+            capabilities_(board_, built_), cameraProbe_(cameraProbe), cameraStream_(cameraStream),
+            networkStream_(networkStream), cameraApi_(cameraStream, cameraProbe, networkStream) {}
 ProvisioningApi::~ProvisioningApi() { stop(); }
 
 esp_err_t ProvisioningApi::start(const camera_hub::ProvisioningPrerequisites& prerequisites,
@@ -173,8 +180,10 @@ esp_err_t ProvisioningApi::start(const camera_hub::ProvisioningPrerequisites& pr
     credentialsEnabled_ = camera_hub::ProvisioningPolicy::canAcceptCredentials(prerequisites);
     apAddress_ = apAddress;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.max_uri_handlers = 12;
-    config.max_open_sockets = 4;
+    config.max_uri_handlers = 24;
+    config.stack_size = 8192;
+    config.max_open_sockets = 6;
+    config.lru_purge_enable = true;
     config.recv_wait_timeout = 2;
     config.send_wait_timeout = 2;
     config.uri_match_fn = httpd_uri_match_wildcard;
@@ -193,15 +202,47 @@ esp_err_t ProvisioningApi::start(const camera_hub::ProvisioningPrerequisites& pr
         {"/api/v1/network/operations/*", HTTP_GET, &ProvisioningApi::operation, this},
         {"/api/v1/network/scan", HTTP_POST, &ProvisioningApi::scan, this},
         {"/api/v1/network/scan/*", HTTP_GET, &ProvisioningApi::scanOperation, this},
+        {"/api/v1/cameras", HTTP_GET, &ProvisioningApi::cameraRequest, this},
+        {"/api/v1/cameras/csi-0", HTTP_GET, &ProvisioningApi::cameraRequest, this},
+        {"/api/v1/cameras/csi-0/config", HTTP_PATCH, &ProvisioningApi::cameraRequest, this},
+        {"/api/v1/camera/session", HTTP_POST, &ProvisioningApi::cameraRequest, this},
+        {"/api/v1/camera/session", HTTP_DELETE, &ProvisioningApi::cameraRequest, this},
+        {"/api/v1/cameras/csi-0/udp", HTTP_GET, &ProvisioningApi::cameraRequest, this},
+        {"/api/v1/cameras/csi-0/udp", HTTP_PUT, &ProvisioningApi::cameraRequest, this},
+        {"/api/v1/cameras/csi-0/stream.sdp", HTTP_GET, &ProvisioningApi::cameraRequest, this},
     };
     for (const auto& route : routes) {
         result = httpd_register_uri_handler(server_, &route);
         if (result != ESP_OK) { stop(); return result; }
     }
+
+    if (cameraStream_.captureStatus().running) {
+        httpd_config_t streamConfig = HTTPD_DEFAULT_CONFIG();
+        streamConfig.server_port = 81;
+        streamConfig.ctrl_port = ESP_HTTPD_DEF_CTRL_PORT + 1;
+        streamConfig.max_uri_handlers = 1;
+        streamConfig.max_open_sockets = 3;
+        streamConfig.recv_wait_timeout = 1;
+        streamConfig.send_wait_timeout = 2;
+        result = httpd_start(&streamServer_, &streamConfig);
+        if (result == ESP_OK) {
+            const httpd_uri_t streamRoute{
+                "/stream.mjpg", HTTP_GET, &ProvisioningApi::videoStream, this};
+            result = httpd_register_uri_handler(streamServer_, &streamRoute);
+            if (result != ESP_OK) {
+                httpd_stop(streamServer_);
+                streamServer_ = nullptr;
+                ESP_LOGW(kTag, "MJPEG route registration failed: %s", esp_err_to_name(result));
+            }
+        } else {
+            ESP_LOGW(kTag, "MJPEG server start failed: %s", esp_err_to_name(result));
+        }
+    }
     return ESP_OK;
 }
 
 void ProvisioningApi::stop() noexcept {
+    if (streamServer_ != nullptr) { httpd_stop(streamServer_); streamServer_ = nullptr; }
     if (server_ != nullptr) { httpd_stop(server_); server_ = nullptr; }
     mbedtls_platform_zeroize(token_.data(), token_.size());
     sessionPeer_ = 0;
@@ -235,6 +276,13 @@ esp_err_t ProvisioningApi::webAsset(httpd_req_t* request) {
         return httpd_resp_send(request, reinterpret_cast<const char*>(asset.start), size);
     }
     return error(request, "404 Not Found", "asset_not_found");
+}
+
+esp_err_t ProvisioningApi::cameraRequest(httpd_req_t* request) {
+    auto& api = *static_cast<ProvisioningApi*>(request->user_ctx);
+    std::uint32_t peer = 0;
+    if (!api.eligible(request, peer, true)) return error(request, "403 Forbidden", "local_context_required");
+    return api.cameraApi_.handle(request, peer);
 }
 
 bool ProvisioningApi::eligible(httpd_req_t* request, std::uint32_t& peer, bool allowStation,
@@ -373,9 +421,21 @@ esp_err_t ProvisioningApi::deviceStatus(httpd_req_t* request) {
         cJSON_AddStringToObject(data, "firmware_version", description == nullptr ? "unknown" : description->version) == nullptr ||
         cJSON_AddNumberToObject(data, "uptime_seconds", static_cast<double>(esp_timer_get_time() / 1000000)) == nullptr ||
         cJSON_AddNumberToObject(data, "free_heap_bytes", static_cast<double>(esp_get_free_heap_size())) == nullptr ||
-        cJSON_AddNullToObject(data, "camera") == nullptr ||
         cJSON_AddStringToObject(data, "camera_probe_state",
                                 camera_hub::cameraProbeStateKey(api.cameraProbe_.state)) == nullptr) {
+        cJSON_Delete(root);
+        return error(request, "500 Internal Server Error", "response_unavailable");
+    }
+    const auto capture = api.cameraStream_.captureStatus();
+    if (capture.running && capture.frameReceived) {
+        cJSON* camera = cJSON_AddObjectToObject(data, "camera");
+        if (camera == nullptr || cJSON_AddNumberToObject(camera, "width", capture.width) == nullptr ||
+            cJSON_AddNumberToObject(camera, "height", capture.height) == nullptr ||
+            cJSON_AddNumberToObject(camera, "fps", capture.fps) == nullptr) {
+            cJSON_Delete(root);
+            return error(request, "500 Internal Server Error", "response_unavailable");
+        }
+    } else if (cJSON_AddNullToObject(data, "camera") == nullptr) {
         cJSON_Delete(root);
         return error(request, "500 Internal Server Error", "response_unavailable");
     }
@@ -413,7 +473,11 @@ esp_err_t ProvisioningApi::deviceCapabilities(httpd_req_t* request) {
 #if !CONFIG_APP_DEV_MODE
     return error(request, "503 Service Unavailable", "device_status_requires_development_profile");
 #else
-    char* body = serializeDeviceCapabilities(api.board_, api.capabilities_, api.runtimeState(isApContext));
+    const auto capture = api.cameraStream_.captureStatus();
+    char* body = serializeDeviceCapabilities(api.board_, api.capabilities_,
+                                              api.runtimeState(isApContext),
+                                              api.streamServer_ != nullptr && capture.running && capture.frameReceived,
+                                              api.networkStream_.status().ready && capture.running && capture.frameReceived);
     if (body == nullptr) return error(request, "500 Internal Server Error", "response_unavailable");
     httpd_resp_set_type(request, "application/json");
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
@@ -421,6 +485,45 @@ esp_err_t ProvisioningApi::deviceCapabilities(httpd_req_t* request) {
     cJSON_free(body);
     return result;
 #endif
+}
+
+esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
+    auto& api = *static_cast<ProvisioningApi*>(request->user_ctx);
+    std::uint32_t peer = 0;
+    if (!api.eligible(request, peer, true))
+        return error(request, "403 Forbidden", "provisioning_context_required");
+    if (api.streamServer_ == nullptr || !api.cameraStream_.captureStatus().running)
+        return error(request, "503 Service Unavailable", "camera_stream_unavailable");
+
+    httpd_resp_set_type(request, "multipart/x-mixed-replace; boundary=frame");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    api.cameraStream_.subscribeHttp();
+
+    esp_err_t result = ESP_OK;
+    while (api.cameraStream_.captureStatus().running) {
+        auto frame = api.cameraStream_.tryTakeHttpFrame();
+        if (!frame) {
+            vTaskDelay(pdMS_TO_TICKS(20));
+            continue;
+        }
+
+        std::array<char, 112> partHeader{};
+        const int headerSize = std::snprintf(partHeader.data(), partHeader.size(),
+            "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: %lu\r\n\r\n",
+            static_cast<unsigned long>(frame.size()));
+        if (headerSize <= 0 || static_cast<std::size_t>(headerSize) >= partHeader.size()) {
+            result = ESP_FAIL;
+            break;
+        }
+        result = httpd_resp_send_chunk(request, partHeader.data(), headerSize);
+        if (result == ESP_OK)
+            result = httpd_resp_send_chunk(request, reinterpret_cast<const char*>(frame.data()), frame.size());
+        if (result == ESP_OK) result = httpd_resp_send_chunk(request, "\r\n", 2);
+        if (result != ESP_OK) break;
+    }
+
+    api.cameraStream_.unsubscribeHttp();
+    return result;
 }
 
 esp_err_t ProvisioningApi::credentials(httpd_req_t* request) {

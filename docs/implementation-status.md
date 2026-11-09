@@ -31,6 +31,20 @@ credential write, NVS erase or eFuse change was performed. Historical
 verification entries below describe earlier stages and may refer to retired
 implementations.
 
+Latest camera result (2026-11-09): ESP-IDF 6.1 P4 build and incremental flash
+PASS on `/dev/ttyACM0`. The OV5647 probe received an 800x800 CSI frame; persistent
+capture runs at an 800x800 profile capped at 20 FPS. HTTP MJPEG returned 200 and
+the embedded WebGUI decoded an 800x800 frame. `http_mjpeg=ready`; `camera` remains
+`unverified` because PCB revision and sustained-operation criteria are unresolved.
+Direct RTP/SDP and RTSP-negotiated UDP decoded actual 800x800 frames with FFmpeg.
+The current driver enumerates all five upstream OV5647 modes, including portrait
+and RAW10 1920x1080; short mode-switch/decode tests passed. The UI exposes
+runtime preview FPS and JPEG quality with authenticated writes. RTP takes the
+latest frame; direct UDP has sub-tick pacing and live sender-timing diagnostics.
+High-resolution JPEGs must fit the bounded 256 KiB RTP budget. USB UVC and
+simultaneous second-camera capture remain unimplemented; the second ribbon
+connector is DSI, not CSI. See [camera verification](verification.md).
+
 ## Available
 
 | Area | State | Evidence |
@@ -46,24 +60,26 @@ implementations.
 | Network provisioner | Implemented, host tested | One queued request, persist before STA, boot restore, IP-confirmed connection |
 | Limited provisioning HTTP API | Server start path reached; no HTTP client request tested | AP-address restriction, client-bound token, credential and operation routes |
 | Device status/capabilities API | HTTP GET and embedded browser GUI verified | `/api/v1/device/status` reports OV5647 and `frame_captured`; capability remains `unverified` |
-| One-frame camera probe | Implemented and passed on current unit | OV5647 PID `0x5647`; one 800x800 MIPI-CSI frame (1,280,000 bytes); probe stops before network startup |
+| OV5647 capture and FrameBroker | Implemented; live frame verified on current unit | 800x800 RGB565 capture, P4 hardware JPEG, bounded 10 MiB PSRAM frame pool; preview capped at 20 FPS |
+| HTTP MJPEG preview | Implemented and verified on current unit | Port 81 `/stream.mjpg`; HTTP 200; browser decoded 800x800; readiness is conditional on active capture/server |
+| Camera configuration | Implemented; FPS/quality change verified on hardware | Actual driver mode enumeration, peer-bound dev session, asynchronous capture-task application and first-frame confirmation |
+| RTP/JPEG over UDP | Implemented; both receiver paths decoded on hardware | Managed espp/rtsp 1.4.2, RTSP port 8554 and direct RTP/SDP, bounded frames and destination |
+| One-frame camera probe | Implemented and passed on current unit | OV5647 PID `0x5647`; one 800x800 MIPI-CSI frame (1,280,000 bytes); preview starts after AP initialization |
 | ESP-IDF P4 firmware | Build, flash and boot pass | ESP-IDF 6.1.0 / esp32p4 on COM8 |
-| Vue WebGUI foundation | Implemented, host and device-browser tested | Same-origin auto-connect displays OV5647 and one-frame probe; persistent stream remains absent |
+| Vue WebGUI | Implemented, host and device-browser tested | Same-origin auto-connect displays OV5647, probe/capture status, profile and live MJPEG preview |
 | CI | Configured, not run on GitHub | Host, frontend and diagnostic build jobs; no release certification |
 | GitHub publication | Blocked | No authenticated fork/create tool or gh available |
 
 ## Not Implemented
 
-- Persistent MIPI-CSI/ISP capture, FrameBroker producer and integration of the
-    P4 hardware JPEG/H.264 encoders.
 - USB UVC device adapter and buffer-return integration.
-- HTTP multipart MJPEG and RTSP/RTP JPEG, including media authentication.
+- Release-grade media authentication; simultaneous multi-sensor capture requires additional verified hardware.
 - Ethernet, routing/failover, full AP wizard/captive portal, network scan/reconnect
     and full mDNS lifecycle management.
 - Hardware activation/read-write-reboot verification of plaintext NVS,
   unique administrator onboarding and authenticated device API.
-- Sustained OV5647 capture/FrameBroker producer; IMX219 has no driver in the current resolved sensor component.
-- Device-side serving of WebGUI and persistent settings.
+- Long-duration OV5647 endurance and board-revision verification; IMX219 has no driver in the current resolved sensor component.
+- Persistent device settings and release-grade authenticated media/API transport.
 - Production release security profile and hardware endurance verification.
 
 ## Required Inputs Before Hardware Integration

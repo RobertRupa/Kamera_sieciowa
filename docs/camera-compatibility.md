@@ -32,13 +32,16 @@ IR-cut and AI processing support are not implied by sensor-driver availability.
 ## Current Implementation
 
 The firmware pins Espressif `esp_video` and compiles the generic OV5647 sensor
-driver. In `APP_DEV_MODE`, the boot probe initializes MIPI-CSI through the
-documented shared Platform I2C bus, reads the supported sensor ID, requests one
-bounded V4L2 frame, then stops capture and deinitializes video. The current unit
-reported OV5647 chip ID `0x5647` and one `800x800` CSI frame. It does not leave an
-application stream running. The probe supports OV5647 only; IMX219/other sensors
-are not identified by the current driver set. A detected sensor and received
-frame are reported separately from the manifest's verified-board capability.
+driver. In the development profile, the boot probe initializes MIPI-CSI through
+the documented shared Platform I2C bus, reads the supported sensor ID, requests
+one bounded V4L2 frame, then stops capture and deinitializes video. After the
+setup AP is ready, a successful OV5647 probe starts persistent 800x800 RGB565
+capture, P4 hardware JPEG encoding, and an HTTP MJPEG stream on port 81, capped
+at 20 FPS. The current unit reported OV5647 chip ID `0x5647`; its embedded GUI
+decoded an 800x800 stream frame. The probe supports OV5647 only; IMX219/other
+sensors are not identified by the current driver set. Sensor/frame evidence and
+the working preview are separate from the manifest's still-unverified board
+capability and do not establish Raspberry Pi module-family equivalence.
 
 The reported Waveshare board has shared camera/display I2C labels on GPIO7/8,
 but its exact PCB revision, camera connector routing, ribbon orientation,

@@ -55,9 +55,9 @@ after 20 seconds. POST `/api/v1/network/scan` returns 202 with `data.operation_i
 `results` containing SSID, RSSI and security. Scan start/result requests use the
 same peer-bound provisioning token as credential writes. Static assets and the
 STA-read-only status route were reached from the host on the same LAN; status
-returned a valid quoted `station_ip`. The final AP scan path after increasing
-the main-task stack is not yet verified from hardware. Captive DNS is NOT
-IMPLEMENTED.
+returned a valid quoted `station_ip`. The embedded GUI's camera status and live
+preview were also verified on STA. The final AP scan path after increasing the
+main-task stack is not yet verified from hardware. Captive DNS is NOT IMPLEMENTED.
 
 ## Provisioning Client Contract
 
@@ -92,8 +92,9 @@ GET requests returned 200 after flash. General device/admin endpoints and accoun
 authentication are not implemented. The prepared Vue assets are served on AP and
 STA origins; successful host GETs to the STA status, index, JS, and CSS routes
 were observed. On STA, the UI shows the assigned IP and hides provisioning
-controls. Scan/session/credential operations remain AP-only. Browser-to-device
-camera status fetching and phone rendering have not been verified.
+controls. Scan/session/credential operations remain AP-only. The embedded
+camera page was verified to decode the device's 800x800 stream; phone rendering
+has not been verified.
 
 All paths are versioned `/api/v1`; successful responses use a `data` envelope.
 The production device status/capability contract requires an authenticated
@@ -113,23 +114,31 @@ a same-origin deployment/proxy. Never configure credentialed wildcard CORS.
     "firmware_version": "0.1.0",
     "uptime_seconds": 0,
     "free_heap_bytes": 0,
-    "camera": null,
-    "camera_probe_state": "not_run"
+    "camera": { "width": 800, "height": 800, "fps": 20 },
+    "camera_probe_state": "frame_captured",
+    "camera_hardware": {
+      "sensor": "OV5647",
+      "module": null,
+      "module_revision": null
+    }
   }
 }
 ```
 
-Values above illustrate the schema, not measured device values. When a persistent
-camera stream is active, `camera` contains numeric `width`, `height`, `fps`
-collected from the pipeline. The one-frame boot probe stops capture before
-network startup, so it leaves `camera: null`.
+The camera values above match the currently tested device profile; uptime and
+heap values are illustrative. When persistent capture is running and has received
+a frame, `camera` contains its configured `width`, `height`, and capped `fps`.
+The one-frame probe itself stops and deinitializes capture. After the setup AP
+starts, a successful probe allows the application to initialize persistent
+capture; failure leaves `camera: null`.
 
 `camera_probe_state` is one of `not_run`, `no_supported_sensor`,
 `sensor_identified`, `frame_captured`, `capture_failed` or `error`. In the
 development profile, the probe initializes the supported OV5647 path over the
 shared Platform I2C bus and attempts to capture one MIPI-CSI frame. A successful
-frame verifies the sensor-to-CSI path for that boot, but does not enable the
-application stream or mark the board profile verified. `no_supported_sensor`
+frame verifies the sensor-to-CSI path for that boot. The application then starts
+the persistent preview only after network initialization; this does not mark the
+board profile verified. `no_supported_sensor`
 means no sensor supported by the compiled probe was found; an unpowered module,
 unsupported sensor or wiring fault can produce the same result.
 
@@ -152,35 +161,107 @@ identified a sensor. Connect and Refresh reload the device status.
 
 The manifest records user-reported module `UC-439`, revision `B`, and possible
 sensor identities `IMX219` / `OV5647`. The development probe has confirmed
-OV5647 PID `0x5647` and one `800x800` CSI frame. Diagnostics continues to
-separate the reported module/revision from the API-detected sensor. UC-439
-revision B is NOT the Waveshare PCB revision; IMX219 and sustained capture remain
-unverified.
+OV5647 PID `0x5647` and one `800x800` CSI frame; a live 800x800 MJPEG frame has
+also been verified. Diagnostics continues to separate the reported
+module/revision from the API-detected sensor. UC-439 revision B is NOT the
+Waveshare PCB revision; long-duration endurance remains unverified.
 
 ## GET /api/v1/device/capabilities
 
 `data` contains `board_id`, `target` (`esp32p4`) and `capabilities`. Values are
 `unsupported`, `unverified`, `disabled`, `not_ready` or `ready`. Base feature
 keys, including `camera`, come from the CapabilityRegistry. The current firmware
-returns `camera=unverified`, `usb_uvc=unverified`, `ethernet=unverified`, and
-`http_mjpeg=disabled` / `rtsp=disabled`. These are conservative hardware and
-implementation states. The OV5647 ID and one CSI frame are reported separately
-by `camera_probe_state`; the camera capability stays `unverified` because the
-physical PCB revision and sustained stream are not verified.
+returns `camera=unverified`, `usb_uvc=unverified`, `ethernet=unverified`,
+`http_mjpeg=ready` while persistent capture and the MJPEG server are active, and
+`rtsp=ready` only while the network stream service and capture are active. The camera capability stays `unverified` because the physical
+PCB revision and sustained-operation requirements are not verified. The OV5647
+sensor, one-frame probe result, and active profile are reported separately.
 
 ## Media
 
-  actual `http_mjpeg=ready`. The current client attempts the same device scheme
-  on this port; the final deployment must confirm TLS/same-origin/session handling.
+The embedded WebGUI opens `http://<device-address>:81/stream.mjpg` as a
+`multipart/x-mixed-replace` image stream. The camera view displays the active
+capture profile and reports an image-load failure as Stream unavailable. Port 80
+serves the GUI and read-only status API; port 81 serves media. The development
+server is local-only and unauthenticated, not a release transport. No device
+address or credentials are embedded in source. RTSP negotiates JPEG RTP/UDP on
+`rtsp://<device-address>:8554/cameras/csi-0`. Direct RTP/UDP uses the configured
+even receiver port and the SDP download below. Both use payload type 26 and a
+90 kHz clock; UDP frames above 256 KiB are dropped and counted. USB UVC remains
+unimplemented. Media endpoints are unauthenticated local-development services,
+not an authenticated or encrypted release transport.
 
-An HTTP image load failure clears the preview and reports Stream unavailable.
-RTSP/JPEG must be validated against RFC 2435 and intended players before readiness.
-Neither media service exists yet, and no addresses/credentials are embedded in source.
+## Camera Inventory and Configuration
 
-## Configuration (Next Integration)
+GET `/api/v1/cameras` returns a bounded `data.cameras` array of detected inputs,
+their IDs, sensors, capture states, and actual MJPEG/RTSP paths and ports. The
+current board has one CSI input (`csi-0`); its other ribbon connector is DSI for
+display output. No second camera or simultaneous multi-CSI capture is claimed.
 
-GET/PATCH `/api/v1/camera/config`: shared profile, supported driver-confirmed
-formats and sensor/encoder controls. PATCH Busy maps to 409 while USB streams;
-an unverified sensor maps to 503. GET/PATCH `/api/v1/network/config` and
-asynchronous scan/connect operations require plaintext NVS and audited C6
-credential storage. Never return passwords or tokens in status/config GET responses.
+GET `/api/v1/cameras/csi-0` returns `settings`, `modes`, `state`, and
+`persistent:false`. Modes are enumerated with `VIDIOC_ENUM_SENSOR_FMT`, not
+guessed from a product name. Each mode exposes its driver ID/name, width,
+height, sensor FPS, and `available` after the application buffer budget check.
+All five modes provided by the resolved OV5647 driver are compiled and selectable:
+RAW8 800x1280/50, 800x640/50, 800x800/50, RAW10 1920x1080/30, and binned
+1280x960/45 sensor FPS. Default remains 800x800. RGB565 capture buffers are capped
+at 5 MiB each; JPEG broker storage remains ten 1 MiB slots in PSRAM. All five
+modes passed short capture/decode tests on the current unit. This is the complete
+resolved-driver inventory, not a claim that every sensor datasheet mode or
+third-party module is supported. A change still requires a frame confirmation.
+
+PATCH `/api/v1/cameras/csi-0/config` requires a camera-session Bearer token and
+exactly `mode_id` (integer 0..31), `preview_fps` (1..20, no greater than the sensor
+rate), and `jpeg_quality` (1..100). Invalid or over-budget settings return 400;
+an operation already pending returns 409. A successful request returns 202.
+Poll the GET route for `queued`, `applying`, `applied`, or `failed`. The capture
+task stops/reallocates buffers for a mode change; it attempts rollback if the
+change fails or no first frame arrives within four seconds. Settings are not
+saved to NVS and revert on reboot. Preview FPS is an encoding/publication cap,
+not a sensor clock control. Exposure, gain, autofocus and module identification
+are not fabricated or exposed as writable controls.
+
+POST `/api/v1/camera/session` accepts a bounded JSON `username`/`password` and
+issues a peer-IP-bound, 900-second token only when both `APP_DEV_MODE` and
+`APP_DEV_DEFAULT_CREDENTIALS` are enabled. That explicit lab profile permits
+`admin/admin`; release/default configuration does not. Login attempts are
+limited to one every five seconds. The browser keeps the token in memory only.
+DELETE on the same route requires the token, revokes it, and stops its direct UDP.
+
+GET/PUT `/api/v1/cameras/csi-0/udp` reads/configures direct RTP/UDP. PUT requires
+the token and exactly `enabled` (boolean) and `port` (even integer 1024..65534).
+The receiver is the authenticated request's peer IP, not an arbitrary supplied
+destination. Sending expires after 900 seconds or stops on logout/network
+restart. Status reports `frames_sent`, `oversized_frames`, `send_errors`, and
+`stale_frames`; optional timing fields are `last_frame_age_us`, `max_frame_age_us`,
+`last_send_duration_us`, and `max_send_duration_us`. Age is measured from the
+producer's encoding-start timestamp to RTP dequeue, not sensor exposure or
+glass-to-glass latency. Send duration covers direct-UDP packetization/send calls,
+not delivery to the player. The GUI refreshes active UDP diagnostics once per
+second with at most one request in flight.
+GET `/api/v1/cameras/csi-0/stream.sdp` downloads SDP only for the active receiver's
+peer IP; open that file in VLC or with
+`ffplay -protocol_whitelist file,udp,rtp csi-0.sdp`. The browser does not decode RTP.
+
+## Lower-Latency Playback
+
+RTP consumes the newest queued frame and discards frames older than 100 ms before
+transmission. Direct UDP uses 500 microseconds of bounded pacing per four packets
+instead of the previous one-tick pause (10 ms at the active 100 Hz tick). RTSP
+also benefits from latest-frame selection but retains its upstream sender pacing.
+No loss-free delivery or fixed end-to-end delay is promised.
+
+For the lowest delay, start with direct RTP/SDP, 800x640 or 800x800, and JPEG
+quality 40..60. Larger resolutions require more bandwidth; 1080p quality 70
+exceeded the 256 KiB JPEG budget in the observed scene. Quality 40 decoded on this
+unit but remains scene-dependent; start at 5..10 preview FPS. Lower quality,
+resolution, or FPS if oversized/drop counters rise.
+
+Reduce the player's own buffering as well: VLC network caching can start at
+50..100 ms; smaller caches may increase visible loss on Wi-Fi. For ffplay:
+
+```sh
+ffplay -protocol_whitelist file,udp,rtp -fflags nobuffer -flags low_delay -framedrop -reorder_queue_size 0 csi-0.sdp
+```
+
+These are receiver tuning suggestions, not measured glass-to-glass latency.

@@ -63,6 +63,16 @@ eFuses, enable flash encryption, or change the partition table as part of normal
 build, onboarding, or flashing.
 
 ## Web API security minimum
+The camera configuration API uses a separate 900-second, peer-bound Bearer
+session in the explicitly enabled development-defaults profile. `admin/admin`
+is compiled only under `APP_DEV_MODE && APP_DEV_DEFAULT_CREDENTIALS`; checked-in
+defaults leave this disabled. The current local active configuration enables it
+for lab testing and the GUI displays a warning. Tokens/passwords are not stored
+in the browser or logged. Direct UDP is limited to that client's IP and an even
+unprivileged port, expires after 900 seconds and stops on logout. HTTP MJPEG and
+RTSP media themselves remain unauthenticated/unencrypted dev-only services.
+Do not expose them to the Internet or claim release readiness.
+
 - Authenticated session for settings, reboot, scans of local networks and firmware actions; provisioning session has limited scope and timeout.
 - Bound payload lengths, validate all strings, restrict HTTP methods, cap auth attempts, use CSRF protection for cookie-authenticated state changes.
 - No credentials, tokens, NVS key material or private identity information in logs, WebGUI `GET` output or error traces.

@@ -23,8 +23,8 @@ config APP_CAMERA_PROBE_ON_BOOT
     help
         Uses the Waveshare Platform shared I2C bus (I2C_NUM_0, SDA 7, SCL 8)
         and Espressif esp_video to identify a supported OV5647 and capture one
-        bounded frame. It uses no reset/PWDN/XCLK GPIO, stops capture before
-        network startup, and does not enable a persistent stream. Unsupported
+        bounded frame. It uses no reset/PWDN/XCLK GPIO and stops capture before
+        network startup. A successful probe enables the development preview. Unsupported
         sensors or an unpowered camera are reported as no supported sensor.
 
 config APP_DEV_DEFAULT_CREDENTIALS
@@ -32,7 +32,8 @@ config APP_DEV_DEFAULT_CREDENTIALS
     depends on APP_DEV_MODE
     default n
     help
-        Reserved for a future authenticated development UI. No account is created.
+        Enable local camera configuration login with admin/admin. The UI shows
+        an insecure-development warning. Never enable this in release firmware.
 
 config APP_WIFI_WIRING_VERIFIED
     bool "C6 transport pinout matches this board and configured ESP-Hosted transport"

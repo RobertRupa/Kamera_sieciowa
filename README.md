@@ -9,29 +9,22 @@ remain disabled. No network credentials were submitted during OTA. See
 [migration notes](migration/README.md). Older COM7/absent-key/mismatch notes
 below describe preceding stages, not the current device state.
 
-Latest hardware result: the normal P4 host and updated C6 companion report
-matching ESP-Hosted 3.1.0, with successful C6 identity over SDIO. BLOCK_KEY0/
-HMAC_UP is programmed and protected but is unused by firmware; Secure Boot and
-Flash Encryption remain disabled. The latest firmware was flashed on COM8 and
-booted. C6 RPC V2 and AP DHCP at 192.168.4.1 were observed; Windows did not see
-the AP SSID, and client HTTP, STA and credential reboot persistence remain
-untested. See
-[latest verification](docs/verification.md).
+Latest camera hardware result: the ESP-IDF 6.1 firmware was incrementally
+flashed to `/dev/ttyACM0`. The device detected OV5647, received an 800x800 CSI
+frame, and served a persistent 800x800 MJPEG preview capped at 20 FPS. The
+embedded WebGUI decoded a live frame. `http_mjpeg=ready`; the board-level
+`camera` capability remains `unverified` pending PCB revision and sustained
+operation checks. See [latest verification](docs/verification.md).
 
-Development foundation for one MIPI-CSI camera on a Waveshare
-ESP32-P4-Module-DEV-KIT, simultaneously exposed to a Windows computer as USB UVC
-and to the network as HTTP MJPEG and RTSP/RTP JPEG.
-
-authenticated admin API and complete device-side WebGUI are not implemented.
-**This is not yet a working camera appliance.** Development firmware returns
-read-only device status/capabilities and runs a one-frame OV5647/CSI probe at
-boot. OV5647 identification and one 800x800 CSI frame have been observed on the
-current unit. Sustained capture/streaming, IMX219, USB UVC, MJPEG/RTSP,
-scan/reconnect, authenticated admin API and complete device-side WebGUI are not
-implemented.
-The limited provisioning API and conditional AP/STA/mDNS startup are implemented
-and compiled. Ordinary NVS initializes on device; the firmware does not encrypt
-Wi-Fi credentials, and anyone with a Flash dump can recover them.
+Development firmware for one MIPI-CSI camera on a Waveshare ESP32-P4-Module-DEV-KIT.
+The current unit has a verified OV5647 preview over HTTP MJPEG and a packaged
+device-side WebGUI, driver-derived runtime configuration, and RTP/UDP streams.
+USB UVC, simultaneous second-camera capture, IMX219 support, production authentication,
+long-duration camera endurance and full release onboarding are not implemented
+or verified. The board's static camera capability remains `unverified`.
+The limited provisioning API and conditional AP/STA/mDNS startup are implemented.
+Ordinary NVS stores Wi-Fi credentials without encryption; anyone with a Flash
+dump can recover them.
 See [implementation status](docs/implementation-status.md).
 
 Wi-Fi update: AP/STA, plain NVS and mDNS adapters compile, as do the three
@@ -50,6 +43,18 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
 	two-frame queues for USB, HTTP and RTSP.
 - Shared-profile validation and rejection of profile changes during active USB.
 - Host tests covering ownership, slow clients, pool exhaustion and concurrent readers.
+- Persistent OV5647 preview through the bounded FrameBroker and HTTP MJPEG endpoint.
+- Driver-enumerated camera settings and per-camera MJPEG/RTSP links in the WebGUI.
+- All five upstream OV5647 modes selectable, from 800x640 through 1920x1080,
+  including 800x1280 portrait and 1280x960 binning; default remains 800x800.
+  Sensor FPS is distinct from the 20 FPS preview cap.
+- RTSP-negotiated RTP/JPEG UDP and direct UDP with an SDP download. See the
+	[camera API](docs/camera-api.md) for ports, authentication and resource limits.
+- Latest-frame RTP delivery and bounded direct-UDP burst pacing reduce avoidable
+	sender backlog. Actual end-to-end delay also depends on Wi-Fi and player caching.
+- The board has one CSI camera connector; its other ribbon connector is DSI for
+	a display. A second simultaneous camera requires a separately verified input,
+	not firmware that treats DSI as CSI.
 - Vue/TypeScript/PrimeVue panel with offline/error states, capability diagnostics,
   English/Polish and system/light/dark themes. These preferences are currently
   session-local, not persisted to the device.
@@ -97,10 +102,13 @@ npm run build
 npm run dev -- --host 127.0.0.1
 ```
 
-The current local preview is at `http://localhost:5173/`. It shows No signal until
-a real device implements the [planned API](docs/camera-api.md) and confirms stream
-readiness. No video, credentials or runtime values are fabricated. Camera/network
-configuration, login and device persistence are not implemented in this panel yet.
+The local Vite preview is at `http://localhost:5173/`. The embedded WebGUI on the
+device uses its same-origin status API and port-81 MJPEG endpoint; the local Vite
+origin is separate and is not the verified live-camera deployment. No video,
+credentials or runtime values are fabricated. Camera settings are runtime-only.
+The active lab profile explicitly enables camera login with `admin/admin` and
+shows an insecure-development warning; release/default configuration does not.
+Persistent device settings and release authentication remain unimplemented.
 
 The setup view at `http://localhost:5173/#/wifi` shows prerequisite status. Its
 SSID/password form is hidden unless the device reports Wi-Fi, wizard and

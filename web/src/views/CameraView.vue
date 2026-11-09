@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
+import CameraControls from '../components/CameraControls.vue'
 import { useDeviceStore } from '../stores/device'
 
 const { t } = useI18n()
@@ -70,4 +71,5 @@ const cameraProbeStatus = computed(() => {
       <div class="output-row"><i class="pi pi-wifi" aria-hidden="true"></i><div><strong>Wi-Fi</strong><span>{{ t(device.state('wifi')) }}</span></div></div>
     </aside>
   </div>
+  <CameraControls />
 </template>

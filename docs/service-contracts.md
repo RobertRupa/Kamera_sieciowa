@@ -95,6 +95,15 @@ secrets, and do not replace the authenticated production contract above.
 Use consistent JSON envelope: success `{"data": {...}}`, failure `{"error": {"code":"invalid_ssid","message":"...","retryable":false}}`. IDs may identify asynchronous operations; no long synchronous scans in HTTP request tasks. Content type `application/json`, UTF-8, max body length, bounded JSON depth, request timeouts. Keep HTTP codes meaningful: 400 invalid input, 401 unauthenticated, 403 forbidden, 404 missing, 409 conflict/busy, 429 rate limit, 500 internal failure, 503 unavailable. Define schema/field ranges in OpenAPI (`docs/api/openapi.yaml` in actual projects); generate typed frontend client where useful.
 
 ## Event contracts
+Camera configuration and streaming use the bounded contracts documented in
+[Camera API](camera-api.md). `CameraConfiguration` is a snapshot of driver modes
+and runtime settings; requests queue a command rather than performing SDK work
+in the HTTP task. The capture task owns reconfiguration/rollback and confirms
+Applied only after a frame. `CameraNetworkStream` consumes leased broker frames;
+its UDP destination is the authenticated peer, and state/counters are read-only
+snapshots. Camera-session tokens are distinct from provisioning tokens and are
+not authorized for Wi-Fi credentials. Configuration is not persisted.
+
 Prefer a single event category/topic naming convention (e.g. `network.state.changed`, `settings.updated`, `wifi.scan.completed`) with fixed payload and task context. Producers enqueue, consumers own their state and choose whether to drop/coalesce/retry. LVGL receives state snapshots via GUI-owned queue; web can poll, SSE or WebSocket only where justified by load.
 
 ## Compatibility

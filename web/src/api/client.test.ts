@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { capabilitiesSchema, normalizeDeviceUrl, statusSchema } from './client'
+import { cameraInventorySchema, cameraSettingsSchema, cameraStreamLink } from './cameras'
 import en from '../locales/en.json'
 import pl from '../locales/pl.json'
 
@@ -18,6 +19,25 @@ describe('device boundary', () => {
   })
   it('ships identical locale keys', () => {
     expect(Object.keys(en).sort()).toEqual(Object.keys(pl).sort())
+  })
+  it('rejects invalid camera settings', () => {
+    expect(cameraSettingsSchema.parse({ mode_id: 0, preview_fps: 20, jpeg_quality: 80 })).toEqual({ mode_id: 0, preview_fps: 20, jpeg_quality: 80 })
+    for (const settings of [
+      { mode_id: -1, preview_fps: 20, jpeg_quality: 80 },
+      { mode_id: 0, preview_fps: 21, jpeg_quality: 80 },
+      { mode_id: 0, preview_fps: 10, jpeg_quality: 101 },
+    ]) expect(() => cameraSettingsSchema.parse(settings)).toThrow()
+  })
+  it('builds camera stream links only for active advertised streams', () => {
+    const camera = { id: 'csi-0', sensor: 'OV5647', interface: 'MIPI-CSI', capturing: true,
+      mjpeg_path: '/stream.mjpg' as const, mjpeg_port: 81,
+      rtsp_path: '/cameras/csi-0', rtsp_port: 8554 }
+    expect(cameraStreamLink('http://192.168.1.2', camera, 'rtsp')).toBe('rtsp://192.168.1.2:8554/cameras/csi-0')
+    expect(cameraStreamLink('http://192.168.1.2', camera, 'mjpeg')).toBe('http://192.168.1.2:81/stream.mjpg')
+    expect(cameraStreamLink('http://192.168.1.2', { ...camera, capturing: false }, 'rtsp')).toBe('')
+    expect(cameraStreamLink('http://192.168.1.2', { ...camera, rtsp_path: null }, 'rtsp')).toBe('')
+    expect(() => cameraInventorySchema.parse({ data: { simultaneous_csi_inputs: 1, development_login: false,
+      cameras: [{ ...camera, rtsp_path: '//external.example/stream' }] } })).toThrow()
   })
   it('keeps camera hardware unknown for legacy status responses', () => {
     const status = statusSchema.parse({ data: {

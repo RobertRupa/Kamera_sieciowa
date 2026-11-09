@@ -87,6 +87,14 @@ PublishResult FrameBroker::publish(const std::uint8_t* jpeg, std::size_t size,
 }
 
 FrameLease FrameBroker::tryTake(Output output) noexcept {
+    return take(output, false);
+}
+
+FrameLease FrameBroker::tryTakeLatest(Output output) noexcept {
+    return take(output, true);
+}
+
+FrameLease FrameBroker::take(Output output, bool latest) noexcept {
     const auto index = static_cast<std::size_t>(output);
     if (index >= outputCount) {
         return {};
@@ -98,6 +106,10 @@ FrameLease FrameBroker::tryTake(Output output) noexcept {
     auto& queue = queues_[index];
     if (queue.size == 0) {
         return {};
+    }
+    while (latest && queue.size > 1) {
+        dropFront(queue);
+        ++stats_.dropped[index];
     }
     const auto selected = queue.slots[0];
     const auto& slot = slots_[selected];

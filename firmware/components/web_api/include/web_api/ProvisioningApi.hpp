@@ -8,7 +8,9 @@
 #include "board_capabilities/CapabilityRegistry.hpp"
 #include "camera_hub/CameraProbeResult.hpp"
 #include "camera_hub/ProvisioningPolicy.hpp"
+#include "camera_stream/CameraHardwareProbe.hpp"
 #include "esp_http_server.h"
+#include "web_api/CameraApi.hpp"
 
 namespace web_api {
 
@@ -18,7 +20,9 @@ public:
                     app_services::NetworkScanService& scanService,
                     board_capabilities::BoardProfile board,
                     board_capabilities::BuildFeatures built,
-                    camera_hub::CameraProbeResult cameraProbe) noexcept;
+                    camera_hub::CameraProbeResult cameraProbe,
+                    camera_stream::CameraHardwareProbe& cameraStream,
+                    camera_stream::CameraNetworkStream& networkStream) noexcept;
     ~ProvisioningApi();
     ProvisioningApi(const ProvisioningApi&) = delete;
     ProvisioningApi& operator=(const ProvisioningApi&) = delete;
@@ -31,11 +35,13 @@ private:
     static esp_err_t status(httpd_req_t* request);
     static esp_err_t deviceStatus(httpd_req_t* request);
     static esp_err_t deviceCapabilities(httpd_req_t* request);
+    static esp_err_t videoStream(httpd_req_t* request);
     static esp_err_t credentials(httpd_req_t* request);
     static esp_err_t operation(httpd_req_t* request);
     static esp_err_t scan(httpd_req_t* request);
     static esp_err_t scanOperation(httpd_req_t* request);
     static esp_err_t webAsset(httpd_req_t* request);
+    static esp_err_t cameraRequest(httpd_req_t* request);
     static esp_err_t error(httpd_req_t* request, const char* status, const char* code);
     bool eligible(httpd_req_t* request, std::uint32_t& peer, bool allowStation = false,
                   bool* isApContext = nullptr) const noexcept;
@@ -47,7 +53,11 @@ private:
     board_capabilities::BuildFeatures built_;
     board_capabilities::CapabilityRegistry capabilities_;
     camera_hub::CameraProbeResult cameraProbe_;
+    camera_stream::CameraHardwareProbe& cameraStream_;
+    camera_stream::CameraNetworkStream& networkStream_;
+    CameraApi cameraApi_;
     httpd_handle_t server_{nullptr};
+    httpd_handle_t streamServer_{nullptr};
     std::uint32_t apAddress_{0};
     std::uint32_t sessionPeer_{0};
     std::int64_t expiresAt_{0};

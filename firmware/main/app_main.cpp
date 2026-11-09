@@ -58,7 +58,7 @@ extern "C" void app_main() {
 #endif
     const board_capabilities::CapabilityRegistry capabilities(board.profile(), built);
     const board_capabilities::RuntimeState runtime{};
-    ESP_LOGW("camera_hub", "One-shot camera probe complete; persistent camera, UVC and IP streaming unavailable");
+    ESP_LOGI("camera_hub", "Camera probe complete; persistent preview starts after the setup AP is ready");
     for (std::size_t index = 0; index < board_capabilities::kFeatureCount; ++index) {
         const auto feature = static_cast<board_capabilities::Feature>(index);
         ESP_LOGI("camera_hub", "%s=%s", capabilities.featureKey(feature),
@@ -68,7 +68,9 @@ extern "C" void app_main() {
     connectivity::WifiService wifi;
     app_services::NetworkProvisioner provisioner(credentialStore, wifi);
     app_services::NetworkScanService scanService(wifi);
-    web_api::ProvisioningApi api(provisioner, scanService, board.profile(), built, cameraProbeResult);
+    camera_stream::CameraNetworkStream networkStreams(cameraProbe);
+    web_api::ProvisioningApi api(provisioner, scanService, board.profile(), built,
+                                 cameraProbeResult, cameraProbe, networkStreams);
     discovery::MdnsService mdns;
     camera_hub::ProvisioningPrerequisites prerequisites{};
     prerequisites.credentialStoreReady = credentialStore.ready();
@@ -86,8 +88,17 @@ extern "C" void app_main() {
         ESP_LOGW("camera_hub", "Provisioning start refused: %s", esp_err_to_name(wifiResult));
         return;
     }
-    if (!wifi.waitForAp(pdMS_TO_TICKS(5000)) || wifi.apAddress() == 0 ||
-        api.start(prerequisites, wifi.apAddress()) != ESP_OK) {
+    if (!wifi.waitForAp(pdMS_TO_TICKS(5000)) || wifi.apAddress() == 0) {
+        ESP_LOGW("camera_hub", "Provisioning AP did not become ready");
+        return;
+    }
+    if (cameraProbeResult.state == camera_hub::CameraProbeState::FrameCaptured) {
+        const auto cameraResult = cameraProbe.startPreview(cameraProbeResult);
+        if (cameraResult != ESP_OK)
+            ESP_LOGW("camera_hub", "Persistent camera preview did not start: %s",
+                     esp_err_to_name(cameraResult));
+    }
+    if (api.start(prerequisites, wifi.apAddress()) != ESP_OK) {
         ESP_LOGW("camera_hub", "Provisioning AP or HTTP start failed");
         return;
     }
@@ -96,6 +107,9 @@ extern "C" void app_main() {
     std::int64_t apStopDeadline = 0;
     std::uint32_t scanOperationId = 0;
     bool apStopped = false;
+    std::uint32_t streamAddress = 0;
+    std::uint8_t streamAttempts = 0;
+    std::int64_t nextStreamAttempt = 0;
     if (prerequisites.companionStorageAudited) {
         const auto restoreResult = provisioner.restoreSavedCredentials();
         if (restoreResult == app_services::RestoreResult::Started) {
@@ -127,6 +141,21 @@ extern "C" void app_main() {
             deadline = esp_timer_get_time() + 30000000;
         }
         provisioner.updateConnection(deadline != 0 && esp_timer_get_time() >= deadline);
+        const auto address = provisioner.stationAddress() != 0
+            ? provisioner.stationAddress() : (apStopped ? 0 : wifi.apAddress());
+        if (address != streamAddress) {
+            networkStreams.stop();
+            streamAddress = address;
+            streamAttempts = 0;
+            nextStreamAttempt = 0;
+        }
+        if (address != 0 && cameraProbe.captureStatus().running && !networkStreams.status().ready &&
+            streamAttempts < 3 && esp_timer_get_time() >= nextStreamAttempt) {
+            ++streamAttempts;
+            nextStreamAttempt = esp_timer_get_time() + 5000000;
+            const auto result = networkStreams.start(address);
+            if (result != ESP_OK) ESP_LOGW("camera_hub", "RTP/RTSP start failed: %s", esp_err_to_name(result));
+        }
         if (provisioner.snapshot().state == app_services::ProvisioningState::Connected && !apStopped) {
             if (apStopDeadline == 0) apStopDeadline = esp_timer_get_time() + 5000000;
             if (esp_timer_get_time() >= apStopDeadline) {

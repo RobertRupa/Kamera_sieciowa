@@ -62,9 +62,9 @@ string(APPEND WEB_ASSET_HEADER
     "inline constexpr EmbeddedWebAsset kWebAssets[]{\n    ${WEB_ASSET_TABLE}\n};\n}\n")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/wifi_web_assets.hpp" "${WEB_ASSET_HEADER}")
 
-idf_component_register(SRCS "src/ProvisioningApi.cpp" INCLUDE_DIRS "include"
+idf_component_register(SRCS "src/ProvisioningApi.cpp" "src/CameraApi.cpp" INCLUDE_DIRS "include"
                        EMBED_FILES ${WEB_EMBEDDED_FILES}
-                       REQUIRES app_services board_capabilities camera_domain esp_http_server
+                       REQUIRES app_services board_capabilities camera_domain camera_stream esp_http_server
                        PRIV_REQUIRES cjson esp_app_format esp_timer esp_hw_support heap lwip mbedtls)
 target_include_directories(${COMPONENT_LIB} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 target_compile_features(${COMPONENT_LIB} PUBLIC cxx_std_17)
