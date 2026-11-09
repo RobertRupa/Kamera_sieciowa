@@ -1,103 +1,74 @@
 # VS Code, incremental build and fast firmware flashing
 
-## Official toolchain
-Use Visual Studio Code with the **Espressif IDF extension** (`espressif.esp-idf-extension`) and official installed ESP-IDF. Prefer maintained stable ESP-IDF 6.1 when target/BSP supports it; select compatible branch explicitly. Configure local Python/toolchain through extension/Espressif Installation Manager, not arbitrary system libraries. Use CMake + Ninja and IDF Component Manager; keep frontend build separate.
+## Root ESP-IDF project (ESP32-P4)
 
-### ESP-IDF "Set target failed" in the repository root
+The only ESP-IDF project root is now **the repository root**,
+`Kamera_sieciowa/`. This is where `CMakeLists.txt`,
+`CMakePresets.json`, `sdkconfig.defaults`, `dependencies.lock` and
+`.vscode/` reside. Source components remain under `firmware/main`
+and `firmware/components`, registered using `EXTRA_COMPONENT_DIRS`.
+The partition CSV stays at `firmware/partitions.csv`; its SDKCONFIG
+path is relative to the new root.
 
-If the ESP-IDF output shows `idf.py -B .../Kamera_sieciowa/build set-target esp32p4`
-followed by `Directory .../build doesn't seem to be a CMake build directory`,
-then **VS Code selected the repository root**, not the ESP-IDF project in
-`firmware/`. This is a project-selection error, not a sensor, flash or CPU
-detection problem.
+Open `Kamera_sieciowa/` directly in VS Code or open
+`Kamera_sieciowa.code-workspace`. Do **not** open `firmware/` as
+the ESP-IDF project. The firmware subdirectory no longer contains an
+ESP-IDF root CMake project.
 
-1. Open **File → Open Workspace from File** →
-   `Kamera_sieciowa.code-workspace`. This workspace now contains **only**
-   the `firmware/` project to make accidental root selection impossible.
-2. Or open the folder `firmware/` directly in a new VS Code window.
-   If using a custom multi-root workspace, choose **ESP-IDF: Pick a Workspace
-   Folder** → **ESP32-P4 Firmware (ESP-IDF)**.
-3. Select **ESP-IDF: Select Project Configuration** → `default`.
-   This preset fixes `IDF_TARGET=esp32p4`, using `firmware/build/default`.
-4. Build/flash from the official ESP-IDF Activity Bar. Do not repeat `set-target` on this single-target project.
+ESP-IDF 6.1 and the Espressif extension use `default` automatically
+(or select it explicitly under **ESP-IDF: Select Project Configuration**).
+The preset already sets `IDF_TARGET=esp32p4`; **do not execute
+Set Target repeatedly**, as that invokes a destructive `fullclean` of
+the selected build directory before attempting configure.
 
-**Do not delete `.../Kamera_sieciowa/build`** to work around this error:
-that directory may contain independent host tests. The root folder's own
-`.vscode/settings.json` disables ESP-IDF activation by design; `firmware/`
-continues to enable it and uses `firmware/build`. ESP-IDF `set-target`
-normally performs a full clean of the selected firmware build directory, so
-avoid re-running it on every build.
+From the repository root:
 
-### Recovery: `build/default` exists without `CMakeCache.txt`
+```bash
+python3 scripts/prepare_web_assets.py
+source "$HOME/.espressif/v6.1/esp-idf/export.sh"
+idf.py --preset default build
+# After selecting the correct programming USB-UART interface:
+idf.py --preset default -p /dev/ttyACM0 flash monitor
+```
 
-This can happen after an earlier CMake configure failure. A second
-**Set Espressif Device Target** action invokes `idf.py set-target`, which
-always runs `fullclean` first. ESP-IDF refuses to delete an incomplete
-directory lacking `CMakeCache.txt`. It is not an ESP32-P4 detection error.
+The `production` preset uses `build/production` with a separate
+`sdkconfig`; `default` uses `build/default`. Both use
+`sdkconfig.defaults` at the repository root. The WebGUI build hook
+runs `python scripts/prepare_web_assets.py` with the repository as cwd.
+Do not move `firmware/main` or `firmware/components` individually.
 
-The repository now pins `IDF_TARGET=esp32p4` and
-`SDKCONFIG_DEFAULTS=sdkconfig.defaults` in **both** the `default` and
-`production` CMake presets. It also aligns the VS Code `idf.buildPath`
-with `firmware/build/default`. Do **not** run **Set Target** again to
-initialise this ESP32-P4-only project: open **ESP-IDF: Select Project
-Configuration → default**, then use **Build your Project**.
+### Repair an incomplete root CMake build
 
-**One-time recovery of the old incomplete directory** (run from the
-repository root; no data is deleted):
+If Set Target prints
+`Directory '.../Kamera_sieciowa/build/default' doesn't seem to be
+a CMake build directory` or
+`There is no CMakeCache.txt`, a previous CMake configure failed
+and left `build/default` in an incomplete state. From the **root**:
 
 ```bash
 python3 scripts/repair_incomplete_idf_build.py --preset default
-source /home/konatsu/.espressif/v6.1/esp-idf/export.sh
-cd firmware
 idf.py --preset default build
 ```
 
-You can instead run **Terminal → Run Task →
-ESP32-P4: Repair incomplete CMake build (default)** in VS Code, and then
-select **Build your Project** in the ESP-IDF sidebar.
+The repair command **renames**, not deletes, an incomplete
+`build/default` to `build/default.incomplete-...`, preserving
+configuration files and logs. It leaves complete build directories
+(with `CMakeCache.txt`) untouched. VS Code also provides the
+**ESP32-P4: Repair incomplete CMake build (default)** task.
 
-The repair script checks the selected preset and moves
-`firmware/build/default` to a unique
-`firmware/build/default.incomplete-YYYYMMDD-HHMMSS` name **only when
-the directory exists without `CMakeCache.txt`**. It preserves its
-logs, configuration and other files; a directory with a CMake cache is
-never touched. After a subsequent configure/build error, fix the **first**
-CMake/compiler error rather than repeatedly selecting Set Target.
+An old `firmware/build/` from previous versions is no longer used.
+It remains ignored by Git and need not be deleted to build from the
+root. Do not use `set-target` as a remedy for a failed CMake configure;
+fix the first actual configure/compiler error.
 
-Machine-specific paths such as `idf.currentSetup`, `idf.port` and
-`clangd.path` belong in VS Code user settings or a local
-`CMakeUserPresets.json` (ignored by Git), not in tracked workspace
-settings. Existing local uncommitted settings should be saved
-separately before updating tracked files if needed.
+### Missing H.264 component
 
-### ESP-IDF 6.1: missing `esp_h264` during `set-target`
-
-If CMake reports `Failed to resolve component 'esp_h264' required by component
-'camera_stream'` and the component manager prints `Deleting 1 unused
-components: espressif__esp_h264`, update this branch first. The
-`camera_stream/idf_component.yml` manifest now declares
-`espressif/esp_h264: 1.4.*` explicitly, and CMake depends on the
-registry component name `espressif__esp_h264`. The dependency is required
-because `CameraHardwareProbe.cpp` directly includes
-`esp_h264_enc_single_hw.h`. This prevents the component manager from
-pruning the library when `esp_video` treats H.264 as a conditional
-dependency.
-
-From an ESP-IDF 6.1 terminal in the project directory, run:
-
-```bash
-idf.py reconfigure
-idf.py build
-```
-
-If the current `set-target` action previously failed, repair the incomplete
-build directory using the script above, then run Build (without Set Target).
-The component manager re-resolves `firmware/dependencies.lock` and
-populates `firmware/managed_components/` automatically; do not manually
-copy files into that directory or remove unrelated build folders.
-If a CMake preset is active, the extension may use
-`firmware/build/default` and a preset-specific `sdkconfig` instead of
-`firmware/build` directly.
+`camera_stream` uses `esp_h264_enc_single_hw.h`. The
+`firmware/components/camera_stream/idf_component.yml` declares
+`espressif/esp_h264` explicitly; CMake requires the managed component
+`espressif__esp_h264`. The Component Manager now resolves dependencies
+from the **root** `dependencies.lock` and stores downloads in the
+root `managed_components/`; do not copy libraries manually.
 
 ## Camera_sieciowa: build and flash from the sidebar
 
@@ -106,20 +77,20 @@ If a CMake preset is active, the extension may use
 2. Install the recommended `espressif.esp-idf-extension` and configure
    **ESP-IDF 6.1** (extension Setup / Espressif Installation Manager).
 3. In the left Activity Bar select **Espressif / ESP-IDF**. If prompted,
-   choose **ESP32-P4 Firmware (ESP-IDF)** as the current project folder.
-   Select the **default** preset (target is **esp32p4**) and the *programming/debug* serial
+   choose **Kamera_sieciowa (ESP32-P4)** as the project folder.
+   Select the **default** preset (target **esp32p4**) and the *programming/debug* serial
    interface (Windows e.g. COM8; Linux e.g. /dev/ttyACM0).
 4. Use **Build Your Project**, **Flash Your Project**, **Monitor Device**
    or **Build, Flash and Start a Monitor** in the Espressif sidebar.
    Flash method is configured as **UART**; the USB HS OTG **UVC port**
    is a different peripheral and is not a firmware flashing port.
 5. VS Code also exposes named **ESP32-P4:** tasks under
-   **Terminal → Run Task** (`firmware/.vscode/tasks.json`). They require
+   **Terminal → Run Task** (`.vscode/tasks.json`). They require
    an ESP-IDF-initialized terminal environment. The official Espressif
    sidebar is the preferred path because it configures the toolchain.
 
 The local-only ESP-IDF pre-build hook runs
-`python ../scripts/prepare_web_assets.py` from `firmware/`:
+`python scripts/prepare_web_assets.py` from the repository root:
 it checks `web/src`, `web/public` and package metadata, runs `npm ci`
 only when dependencies are absent, and performs `npm run build`
 only when assets are missing or stale. **Node.js/npm is required**
@@ -137,7 +108,7 @@ remains separate.
 
 ## One-time device setup
 ```bash
-# Inside exported ESP-IDF environment
+# From the repository root in an exported ESP-IDF environment
 idf.py --version
 idf.py --preset default build  # default preset sets IDF_TARGET=esp32p4
 ```
@@ -146,18 +117,18 @@ idf.py --preset default build  # default preset sets IDF_TARGET=esp32p4
 ## Fast upload
 ```bash
 # Linux (choose actual port):
-idf.py -p /dev/ttyUSB0 flash
-idf.py -p /dev/ttyUSB0 monitor
+idf.py --preset default -p /dev/ttyUSB0 flash
+idf.py --preset default -p /dev/ttyUSB0 monitor
 # Build-if-needed, flash and monitor:
-idf.py -p /dev/ttyUSB0 flash monitor
+idf.py --preset default -p /dev/ttyUSB0 flash monitor
 # Windows PowerShell in active IDF environment:
-idf.py -p COM5 flash monitor
+idf.py --preset default -p COM5 flash monitor
 ```
 `idf.py flash` invokes required incremental build stages; `idf.py build` is optional as a separate test step. Avoid automatic pre-flash backup, manual SHA/MD5 readback comparison, `fullclean`, partition erase or `erase-flash` as everyday actions. **Do not disable normal ESP-IDF/esptool firmware header/checksum/integrity validation**.
 
 Separate explicit operations: chip erase, new partition schema, NVS reset, key or eFuse provisioning, flash encryption/secure boot and recovery. These can be destructive/irreversible; require explicit authorization. For slow upload diagnose cable, baud, boot-mode GPIO, USB-serial driver, permissions and target before disabling guards.
 
-Copy [fast-flash script](../templates/esp-idf/scripts/quick-flash.sh) to firmware's `scripts/`. CI should build/verify but never auto-flash unknown USB devices.
+See [fast-flash script template](../templates/esp-idf/scripts/quick-flash.sh) for other projects. CI should build/verify but never auto-flash unknown USB devices.
 
 ## VS Code checklist
 - Install Espressif IDF extension and one C++ IntelliSense provider (clangd or MS C/C++) with generated compilation database.

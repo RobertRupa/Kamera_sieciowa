@@ -13,8 +13,7 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-FIRMWARE = ROOT / "firmware"
-PRESETS = FIRMWARE / "CMakePresets.json"
+PRESETS = ROOT / "CMakePresets.json"
 
 
 def main() -> int:
@@ -33,8 +32,8 @@ def main() -> int:
     if not raw.startswith("${sourceDir}/"):
         print("ERROR: only source-relative build paths are supported", file=sys.stderr)
         return 2
-    build_dir = FIRMWARE / raw[len("${sourceDir}/"):]
-    root = (FIRMWARE / "build").resolve()
+    build_dir = ROOT / raw[len("${sourceDir}/"):]
+    root = (ROOT / "build").resolve()
     if build_dir.is_symlink() or not build_dir.resolve().is_relative_to(root):
         print(f"ERROR: unsafe build directory: {build_dir}", file=sys.stderr)
         return 2

@@ -47,6 +47,5 @@ jobs:
       - run: npm ci --prefix web
       - run: npm run build --prefix web
       - run: >-
-          docker run --rm -v "$PWD:/workspace" -w /workspace/firmware
-          espressif/idf:v6.1 idf.py -B /workspace/build/p4
-          -D SDKCONFIG=/workspace/build/sdkconfig.p4 -D IDF_TARGET=esp32p4 build
+          docker run --rm -v "$PWD:/workspace" -w /workspace
+          espressif/idf:v6.1 idf.py --preset default build

@@ -40,7 +40,7 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
 
 ## Implemented
 
-- Native ESP-IDF 6.1/P4 diagnostic project in [firmware](firmware/).
+- Native ESP-IDF 6.1/ESP32-P4 project rooted in this repository; component sources remain in [firmware](firmware/).
 - Shared immutable JPEG frame leases, bounded external storage and independent
 	two-frame queues for USB, HTTP and RTSP.
 - Shared-profile validation and rejection of profile changes during active USB.
@@ -94,19 +94,24 @@ From an ESP-IDF 6.1 terminal, prepare the embedded WebGUI once/when changed:
 python scripts/prepare_web_assets.py
 ```
 
-For sidebar Build/Flash/Monitor, open
-[`Kamera_sieciowa.code-workspace`](Kamera_sieciowa.code-workspace) in
-VS Code, install the Espressif ESP-IDF extension, and select the
-`ESP32-P4 Firmware (ESP-IDF)` workspace folder (the provided workspace contains only `firmware/`, not the repository root). The extension's pre-build hook
-runs the incremental WebGUI preparation automatically.
+Open the **repository root** (`Kamera_sieciowa/`) directly in VS Code
+or use [`Kamera_sieciowa.code-workspace`](Kamera_sieciowa.code-workspace).
+The Espressif sidebar builds the **root** ESP-IDF project; component sources
+remain in `firmware/`. The extension pre-build hook prepares WebGUI assets.
 
-Then, from an ESP-IDF 6.1 terminal:
+Then run from the repository root in an ESP-IDF 6.1 terminal:
 
-```powershell
-Set-Location firmware
-idf.py set-target esp32p4
-idf.py build
+```bash
+idf.py --preset default build
+# Optional: flash through the board's programming USB-UART interface
+idf.py --preset default -p /dev/ttyACM0 flash monitor
 ```
+
+The `default` CMake preset already fixes `IDF_TARGET=esp32p4`. Do not run
+`idf.py set-target` on every build. A stale pre-migration
+`firmware/build/` is not used. If root `build/default` is incomplete,
+run `python3 scripts/repair_incomplete_idf_build.py --preset default`
+once before building. See [VS Code instructions](docs/build-flash-vscode.md).
 
 The unchanged partition table contains an ordinary `app_config` NVS partition at
 0xE10000/24 KiB. It is not encrypted; Flash readers can recover saved Wi-Fi
