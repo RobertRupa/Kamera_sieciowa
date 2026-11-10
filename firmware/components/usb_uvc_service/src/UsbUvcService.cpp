@@ -3,6 +3,7 @@
 #include <cstddef>
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -88,7 +89,30 @@ esp_err_t UsbUvcService::onStart(uvc_format_t format, int width, int height,
 
 uvc_fb_t* UsbUvcService::onGetFrame(void* context) {
     auto& service = *static_cast<UsbUvcService*>(context);
-    if (!service.streaming_.load()) return nullptr;
+    if (!service.streaming_.load()) {
+        service.metricsStartedUs_ = 0;
+        service.framesFed_ = 0;
+        service.bytesFed_ = 0;
+        return nullptr;
+    }
+    const auto nowUs = esp_timer_get_time();
+    if (service.metricsStartedUs_ == 0) service.metricsStartedUs_ = nowUs;
+    if (nowUs - service.metricsStartedUs_ >= 5000000) {
+        const auto elapsed = static_cast<std::uint64_t>(nowUs - service.metricsStartedUs_);
+        const auto fpsX10 = elapsed
+            ? static_cast<std::uint64_t>(service.framesFed_) * 10000000ULL / elapsed : 0;
+        ESP_LOGI(kTag,
+                 "UVC feeder 5s: frames=%lu (fps=%llu.%llu), avg_jpeg=%llu B "
+                 "(driver acceptance; not host-delivered FPS)",
+                 static_cast<unsigned long>(service.framesFed_),
+                 static_cast<unsigned long long>(fpsX10 / 10),
+                 static_cast<unsigned long long>(fpsX10 % 10),
+                 static_cast<unsigned long long>(service.framesFed_
+                     ? service.bytesFed_ / service.framesFed_ : 0));
+        service.metricsStartedUs_ = nowUs;
+        service.framesFed_ = 0;
+        service.bytesFed_ = 0;
+    }
     const auto status = service.camera_.captureStatus();
     const auto configuration = service.camera_.configuration();
     if (!status.running || status.codec != camera_hub::VideoCodec::Jpeg ||
@@ -111,6 +135,8 @@ uvc_fb_t* UsbUvcService::onGetFrame(void* context) {
     service.frame_.width = status.width;
     service.frame_.height = status.height;
     service.frame_.format = UVC_FORMAT_JPEG;
+    ++service.framesFed_;
+    service.bytesFed_ += service.frame_.len;
     service.frame_.timestamp.tv_sec = static_cast<time_t>(us / 1000000);
     service.frame_.timestamp.tv_usec = static_cast<suseconds_t>(us % 1000000);
     return &service.frame_;

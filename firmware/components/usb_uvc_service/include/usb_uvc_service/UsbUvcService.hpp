@@ -34,6 +34,10 @@ private:
     int requestedWidth_{0};
     int requestedHeight_{0};
     int requestedFps_{0};
+    // Updated exclusively by the UVC frame worker in onGetFrame().
+    std::int64_t metricsStartedUs_{0};
+    std::uint32_t framesFed_{0};
+    std::uint64_t bytesFed_{0};
 };
 
 } // namespace usb_uvc_service
