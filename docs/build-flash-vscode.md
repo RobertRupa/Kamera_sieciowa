@@ -37,6 +37,29 @@ The `production` preset uses `build/production` with a separate
 runs `python scripts/prepare_web_assets.py` with the repository as cwd.
 Do not move `firmware/main` or `firmware/components` individually.
 
+### USB webcam versus WebGUI configuration
+
+If the USB camera enumerates but the browser shows an old mode, the WebGUI
+must poll the camera configuration API. The current frontend refreshes live
+USB ownership, sensor mode and nominal FPS. On UVC host disconnect the P4
+releases the USB lock and restores the pre-USB mode; no P4 reset is required.
+Browser HTTP MJPEG is capped at 10 FPS while USB is active to give USB
+priority. This cap does **not** affect the USB sensor/transfer target.
+
+If WebGUI settings remain disabled after unplugging the host, check whether
+the development login flag was enabled in the **active** generated config:
+
+```bash
+grep -E 'APP_DEV_DEFAULT_CREDENTIALS|APP_DEV_MODE' build/default/sdkconfig
+idf.py --preset default menuconfig   # Camera Hub -> insecure development defaults
+```
+
+The `default` profile enables lab-only admin/admin login for camera controls
+through `sdkconfig.dev.defaults`; it is intentionally excluded from
+`production`. Never expose the open AP or known password to an untrusted
+network. Note that editing the camera and restoring USB state do not change
+the ESP32-C6 ESP-Hosted/SDIO link.
+
 ### Board profile: ESP32-P4 + ESP32-C6 over SDIO
 
 `default` is the main profile for **Waveshare ESP32-P4-Module-DEV-KIT

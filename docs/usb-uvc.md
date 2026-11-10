@@ -102,6 +102,62 @@ then `idf.py --preset default build flash monitor`. On boot check
 initialization then fails in ESP-Hosted/SDIO, inspect the **first**
 `wifi_service` or `esp_hosted` error; it is a separate issue.
 
+## USB stream ownership, WebGUI settings and live preview
+
+The P4's OV5647 is a single CSI source shared by USB UVC, HTTP MJPEG and
+RTSP. A UVC COMMIT temporarily selects the USB host's mode. It does **not**
+mean the host is receiving every advertised nominal frame.
+
+**Regression fixed:** the UVC 1.3.1 unmount handler does not call the
+registered `stop_cb`. If an application exited or the USB cable was
+unplugged, the old firmware could leave `usbActive` set and the WebGUI
+configuration endpoint would return HTTP 409 indefinitely.
+
+The firmware now checks USB mounted/streaming state and the time since the
+UVC frame callback was last serviced. A genuinely stopped/stalled USB stream
+is released, and the pre-USB sensor profile is queued for restoration. A
+one-second grace period distinguishes a host re-COMMIT from a disconnect.
+The check runs even when P4↔C6 provisioning is unavailable.
+
+**WebGUI behavior:**
+
+- The camera configuration API now includes `usb_streaming` as live state.
+- Camera controls refresh the state every two seconds without replacing
+  unsaved UI changes. The camera status view also refreshes.
+- During UVC control, the form reports that USB owns the sensor. After
+  stream end it unlocks following restoration; the former mode is restored.
+- The WebGUI displays *nominal sensor FPS*, not measured USB throughput.
+- Browser MJPEG uses the newest buffered frame. While USB is active, HTTP
+  preview delivery is limited to **10 FPS** to prioritize USB transport
+  and avoid a second full-rate Wi-Fi/SDIO output. USB itself is **not**
+  rate limited by this cap.
+- Editing a camera no longer depends on RTSP/UDP being ready.
+- The `default` development profile enables a **test-only admin/admin**
+  login for settings; the `production` profile does not. Since the setup
+  AP is open, this mode is **unsafe for untrusted networks**.
+
+**Important when upgrading an existing device:** `build/default/sdkconfig`
+is generated and retained across git pulls. New `sdkconfig.dev.defaults`
+entries may not override its current `CONFIG_APP_DEV_DEFAULT_CREDENTIALS=n`.
+From the repository root, run `idf.py --preset default menuconfig`, open
+**Camera Hub**, and enable **Permit insecure development defaults** in a
+controlled lab. This is never an automatic production setting.
+
+To verify the recovery after flashing, close FFmpeg or unplug the verified
+USB-UVC data connection. In the P4 serial log watch for:
+
+```text
+USB host streaming ended/stalled ... releasing camera
+USB closed: restoring previous sensor mode=...
+```
+
+The restore message only appears when the USB-selected sensor mode
+actually differs from the previous one. After a short delay, the WebGUI
+should show `usb_streaming=false` and allow another edit. Reconnect USB
+and compare `UVC COMMIT`, `UVC CSI 5s` and `UVC feeder 5s` logs to
+the FFmpeg-received FPS. A live USB view may reduce the browser preview
+rate intentionally, without changing the UVC descriptor.
+
 ## Observed USB host detection and throughput diagnosis
 
 Linux has now **enumerated the native USB 2.0 High-Speed UVC 1.5 device**:
