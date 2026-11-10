@@ -30,6 +30,8 @@ const token = ref('')
 const expiresAt = ref(0)
 const pending = ref(false)
 const message = ref('')
+const editing = ref(false)
+let syncingControls = false
 let generation = 0
 const cameras = computed(() => inventory.value?.cameras.map(camera => ({ ...camera,
   label: `${camera.id} · ${camera.sensor} · ${camera.interface}` })) ?? [])
@@ -40,14 +42,22 @@ const codecOptions = computed(() => (configuration.value?.hardware_codecs ?? ['j
   disabled: value === 'h264' && !modes.value.find(mode => mode.id === modeId.value)?.h264_available,
 })))
 const compatibleCodec = computed(() => codec.value !== 'h264' || modes.value.find(mode => mode.id === modeId.value)?.h264_available)
+const usbStreaming = computed(() => configuration.value?.usb_streaming === true)
 const sdpLink = computed(() => `${device.base}/api/v1/cameras/${selected.value}/stream.sdp`)
+
+watch([modeId, quality, codec, bitrate], () => {
+  if (!syncingControls) editing.value = true
+}, { flush: 'sync' })
 
 function acceptConfiguration(value: CameraConfiguration) {
   configuration.value = value
+  syncingControls = true
   modeId.value = value.settings.mode_id
   quality.value = value.settings.jpeg_quality
   codec.value = value.settings.codec
   bitrate.value = value.settings.h264_bitrate
+  editing.value = false
+  syncingControls = false
 }
 
 async function refreshCamera() {
@@ -70,6 +80,7 @@ watch(() => device.connected ? device.base : '', async base => {
   const current = generation
   inventory.value = null
   configuration.value = null
+  editing.value = false
   udp.value = null
   token.value = ''
   password.value = ''
@@ -85,6 +96,24 @@ watch(() => device.connected ? device.base : '', async base => {
 }, { immediate: true })
 
 watch(selected, refreshCamera)
+// UVC COMMIT and USB disconnect change camera settings independently of the UI.
+// Poll the device while preserving unsaved edits in the form.
+let cameraPollPending = false
+const cameraPollTimer = setInterval(async () => {
+  if (cameraPollPending || pending.value || !device.connected || !selected.value) return
+  const current = generation
+  const cameraId = selected.value
+  cameraPollPending = true
+  try {
+    const snapshot = await getCameraConfiguration(device.base, cameraId)
+    if (current !== generation || cameraId !== selected.value) return
+    if (editing.value) configuration.value = snapshot
+    else acceptConfiguration(snapshot)
+    await device.refreshStatus(false)
+  } catch {
+    // Keep the last known state; the next polling interval retries.
+  } finally { cameraPollPending = false }
+}, 2000)
 let udpPollPending = false
 const udpPollTimer = setInterval(async () => {
   if (udpPollPending || pending.value || !device.connected || !selected.value || !udp.value?.enabled) return
@@ -97,7 +126,13 @@ const udpPollTimer = setInterval(async () => {
     if (current === generation) message.value = 'camera_configuration_unavailable'
   } finally { udpPollPending = false }
 }, 1000)
-onBeforeUnmount(() => { clearInterval(udpPollTimer); ++generation; token.value = ''; password.value = '' })
+onBeforeUnmount(() => {
+  clearInterval(cameraPollTimer)
+  clearInterval(udpPollTimer)
+  ++generation
+  token.value = ''
+  password.value = ''
+})
 
 async function action(work: () => Promise<void>) {
   if (pending.value) return
@@ -105,7 +140,8 @@ async function action(work: () => Promise<void>) {
   message.value = ''
   try { await work() }
   catch (cause) {
-    message.value = cause instanceof Error && cause.message === 'unauthorized' ? 'unauthorized' : 'camera_configuration_failed'
+    message.value = cause instanceof Error && ['unauthorized', 'camera_busy'].includes(cause.message)
+      ? cause.message : 'camera_configuration_failed'
     if (message.value === 'unauthorized') token.value = ''
   } finally { pending.value = false; password.value = '' }
 }
@@ -143,12 +179,8 @@ function apply() {
       if (value.state === 'failed') throw new Error('camera_configuration_failed')
       if (value.state === 'applied') {
         acceptConfiguration(value)
-        for (let retry = 0; retry < 20 && current === generation; ++retry) {
-          const network = await getCameraUdp(device.base, selected.value)
-          if (network.ready && network.codec === value.settings.codec) break
-          if (retry === 19) throw new Error('camera_configuration_failed')
-          await new Promise(resolve => setTimeout(resolve, 200))
-        }
+        // RTSP/UDP may be disabled while camera configuration is still valid.
+        // Report camera success independently from network-stream availability.
         if (current !== generation) return
         inventory.value = await getCameras(device.base)
         await refreshCamera()
@@ -182,6 +214,8 @@ function applyUdp() {
         <Select id="camera-input" v-model="selected" :aria-label="t('camera_input')" :options="cameras" option-label="label" option-value="id" :disabled="pending" />
       </div>
       <Message v-if="inventory.development_login" severity="warn" :closable="false">{{ t('camera_development_warning') }}</Message>
+      <Message v-else severity="warn" :closable="false">{{ t('camera_login_disabled') }}</Message>
+      <Message v-if="usbStreaming" severity="info" :closable="false">{{ t('camera_usb_locked') }}</Message>
       <form v-if="inventory.development_login && !token" class="camera-login" @submit.prevent="login">
         <label for="camera-username">{{ t('username') }}</label>
         <InputText id="camera-username" v-model="username" autocomplete="username" maxlength="32" :disabled="pending" required />
@@ -192,25 +226,25 @@ function applyUdp() {
       <Button v-if="token" icon="pi pi-sign-out" :label="t('logout')" :disabled="pending" @click="logout" />
       <form v-if="configuration" class="camera-settings-grid" @submit.prevent="apply">
         <label for="camera-mode">{{ t('sensor_mode') }}</label>
-        <Select id="camera-mode" v-model="modeId" :aria-label="t('sensor_mode')" :options="modes" option-label="label" option-value="id" option-disabled="disabled" :disabled="pending || !token" />
+        <Select id="camera-mode" v-model="modeId" :aria-label="t('sensor_mode')" :options="modes" option-label="label" option-value="id" option-disabled="disabled" :disabled="pending || !token || usbStreaming" />
         <label for="camera-codec">{{ t('hardware_codec') }}</label>
-        <Select id="camera-codec" v-model="codec" :aria-label="t('hardware_codec')" :options="codecOptions" option-label="label" option-value="value" option-disabled="disabled" :disabled="pending || !token" />
+        <Select id="camera-codec" v-model="codec" :aria-label="t('hardware_codec')" :options="codecOptions" option-label="label" option-value="value" option-disabled="disabled" :disabled="pending || !token || usbStreaming" />
         <template v-if="codec === 'jpeg'">
           <label for="camera-quality">{{ t('jpeg_quality') }}</label>
-          <InputNumber input-id="camera-quality" v-model="quality" :min="1" :max="100" show-buttons :disabled="pending || !token" />
+          <InputNumber input-id="camera-quality" v-model="quality" :min="1" :max="100" show-buttons :disabled="pending || !token || usbStreaming" />
         </template>
         <template v-else>
           <label for="camera-bitrate">{{ t('h264_bitrate') }}</label>
-          <InputNumber input-id="camera-bitrate" v-model="bitrate" :min="64000" :max="10000000" :step="64000" :use-grouping="false" show-buttons :disabled="pending || !token" />
+          <InputNumber input-id="camera-bitrate" v-model="bitrate" :min="64000" :max="10000000" :step="64000" :use-grouping="false" show-buttons :disabled="pending || !token || usbStreaming" />
         </template>
         <span>{{ t('camera_runtime_only') }}</span>
-        <Button type="submit" icon="pi pi-check" :label="t('apply_camera')" :loading="pending" :disabled="!token || !compatibleCodec || !modes.some(mode => mode.id === modeId && mode.available)" />
+        <Button type="submit" icon="pi pi-check" :label="t('apply_camera')" :loading="pending" :disabled="!token || usbStreaming || !compatibleCodec || !modes.some(mode => mode.id === modeId && mode.available)" />
       </form>
       <form v-if="udp?.ready" class="camera-settings-grid" @submit.prevent="applyUdp">
         <label for="camera-udp">RTP / UDP</label>
-        <ToggleSwitch input-id="camera-udp" v-model="udpEnabled" :disabled="pending || !token" />
+        <ToggleSwitch input-id="camera-udp" v-model="udpEnabled" :disabled="pending || !token || usbStreaming" />
         <label for="camera-udp-port">{{ t('udp_port') }}</label>
-        <InputNumber input-id="camera-udp-port" v-model="udpPort" :min="1024" :max="65534" :step="2" :use-grouping="false" show-buttons :disabled="pending || !token" />
+        <InputNumber input-id="camera-udp-port" v-model="udpPort" :min="1024" :max="65534" :step="2" :use-grouping="false" show-buttons :disabled="pending || !token || usbStreaming" />
         <span>{{ t('udp_receiver') }}</span><span>{{ udp.receiver || t('unknown') }}</span>
         <span>{{ t('udp_frames') }}</span><span>{{ udp.frames_sent }} / {{ udp.oversized_frames }} / {{ udp.send_errors }}</span>
         <template v-if="udp.last_frame_age_us !== undefined">

@@ -26,14 +26,14 @@ export const useDeviceStore = defineStore('device', () => {
     return url.toString()
   })
   function state(feature: string) { return capabilities.value?.capabilities[feature] ?? 'unknown' }
-  async function refreshStatus() {
+  async function refreshStatus(resetStreamError = true) {
     const [deviceStatus, deviceCapabilities] = await Promise.all([
       getDeviceResource(base.value, '/api/v1/device/status', statusSchema),
       getDeviceResource(base.value, '/api/v1/device/capabilities', capabilitiesSchema),
     ])
     status.value = deviceStatus.data
     capabilities.value = deviceCapabilities.data
-    streamError.value = false
+    if (resetStreamError) streamError.value = false
   }
   async function connect() {
     if (pending.value) return
