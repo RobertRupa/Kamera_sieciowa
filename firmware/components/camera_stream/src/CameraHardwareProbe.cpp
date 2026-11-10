@@ -461,7 +461,15 @@ void CameraHardwareProbe::captureTaskEntry(void* context) {
 
 void CameraHardwareProbe::captureTask() noexcept {
     auto& state = *state_;
-    std::int64_t lastEncodeUs = 0;
+    // CSI/V4L2 already paces sensor frames. An additional 1/FPS gate
+    // skipped valid frames when the sensor timestamp had minor jitter.
+    constexpr std::int64_t kMetricsIntervalUs = 5000000;
+    std::int64_t metricsStartUs = 0;
+    std::uint32_t capturedFrames = 0;
+    std::uint32_t encodedFrames = 0;
+    std::uint32_t publishedFrames = 0;
+    std::uint64_t encodedBytes = 0;
+    std::uint64_t encodeTimeUs = 0;
     std::int64_t configurationDeadline = 0;
     camera_hub::CameraSettings rollbackSettings{};
     while (state.running.load()) {
@@ -521,6 +529,7 @@ void CameraHardwareProbe::captureTask() noexcept {
 
         if ((buffer.flags & V4L2_BUF_FLAG_DONE) != 0 && buffer.bytesused != 0) {
             state.frameReceived.store(true);
+            if (state.usbActive.load()) ++capturedFrames;
             bool validating = false;
             camera_hub::VideoCodec codec{};
             {
@@ -534,11 +543,11 @@ void CameraHardwareProbe::captureTask() noexcept {
                 hasHttpSubscribers = state.httpSubscribers != 0;
             }
             const auto now = esp_timer_get_time();
-            if ((validating || (hasHttpSubscribers && codec == camera_hub::VideoCodec::Jpeg) ||
-                 (state.usbActive.load() && codec == camera_hub::VideoCodec::Jpeg) ||
-                 state.networkEnabled.load()) &&
-                now - lastEncodeUs >= 1000000 / state.fps) {
+            if (validating || (hasHttpSubscribers && codec == camera_hub::VideoCodec::Jpeg) ||
+                (state.usbActive.load() && codec == camera_hub::VideoCodec::Jpeg) ||
+                state.networkEnabled.load()) {
                 std::uint32_t jpegSize = 0;
+                const auto encodeStartUs = esp_timer_get_time();
                 const auto* source = static_cast<const std::uint8_t*>(
                     state.captureBuffers[buffer.index].address);
                 esp_err_t encodeResult = ESP_FAIL;
@@ -565,9 +574,18 @@ void CameraHardwareProbe::captureTask() noexcept {
                         encodeResult = ESP_OK;
                     }
                 }
+                if (state.usbActive.load() && codec == camera_hub::VideoCodec::Jpeg) {
+                    encodeTimeUs += static_cast<std::uint64_t>(esp_timer_get_time() - encodeStartUs);
+                    if (encodeResult == ESP_OK) {
+                        ++encodedFrames;
+                        encodedBytes += jpegSize;
+                    }
+                }
                 if (encodeResult == ESP_OK) {
                     const auto published = state.broker->publish(state.jpegOutput, jpegSize,
                                                                  static_cast<std::uint64_t>(now), codec);
+                    if (state.usbActive.load() && published == camera_hub::PublishResult::Published)
+                        ++publishedFrames;
                     if (validating && published == camera_hub::PublishResult::Published) {
                         const std::lock_guard<std::mutex> lock(state.configurationMutex);
                         state.configuration.state = camera_hub::ConfigurationState::Applied;
@@ -585,7 +603,6 @@ void CameraHardwareProbe::captureTask() noexcept {
                              static_cast<unsigned long>(state.captureBufferSize),
                              static_cast<unsigned long>(state.jpegOutputSize));
                 }
-                lastEncodeUs = now;
                 if (validating && encodeResult != ESP_OK) {
                     const bool restored = restoreConfiguration(rollbackSettings);
                     configurationDeadline = 0;
@@ -597,6 +614,29 @@ void CameraHardwareProbe::captureTask() noexcept {
         if (ioctl(state.cameraFd, VIDIOC_QBUF, &buffer) != 0) {
             ESP_LOGW(kTag, "capture requeue failed: errno=%d", errno);
             break;
+        }
+        // Per-5-second counters; no per-frame logs in the capture hot path.
+        if (state.usbActive.load()) {
+            const auto timeUs = esp_timer_get_time();
+            if (metricsStartUs == 0) metricsStartUs = timeUs;
+            if (timeUs - metricsStartUs >= kMetricsIntervalUs) {
+                ESP_LOGI(kTag,
+                         "UVC CSI 5s: captured=%lu encoded=%lu published=%lu "
+                         "avg_jpeg=%llu B avg_encode=%llu us pool_exhausted=%llu",
+                         static_cast<unsigned long>(capturedFrames),
+                         static_cast<unsigned long>(encodedFrames),
+                         static_cast<unsigned long>(publishedFrames),
+                         static_cast<unsigned long long>(encodedFrames ? encodedBytes / encodedFrames : 0),
+                         static_cast<unsigned long long>(encodedFrames ? encodeTimeUs / encodedFrames : 0),
+                         static_cast<unsigned long long>(state.broker->stats().poolExhausted));
+                metricsStartUs = timeUs;
+                capturedFrames = encodedFrames = publishedFrames = 0;
+                encodedBytes = encodeTimeUs = 0;
+            }
+        } else {
+            metricsStartUs = 0;
+            capturedFrames = encodedFrames = publishedFrames = 0;
+            encodedBytes = encodeTimeUs = 0;
         }
     }
     if (state.streamStarted) {
