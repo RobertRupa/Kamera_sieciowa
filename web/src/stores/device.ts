@@ -10,7 +10,7 @@ export const useDeviceStore = defineStore('device', () => {
     revision: hardwareManifest.camera.module_revision,
     sensors: Object.freeze([...hardwareManifest.camera.reported_sensors]),
   })
-  const address = ref(import.meta.env.DEV ? 'http://camera-hub.local' : window.location.origin)
+  const address = ref(import.meta.env.DEV ? 'http://camera_hub.local' : window.location.origin)
   const base = ref('')
   const status = ref<DeviceStatus | null>(null)
   const capabilities = ref<Capabilities | null>(null)

@@ -59,6 +59,20 @@ returned a valid quoted `station_ip`. The embedded GUI's camera status and live
 preview were also verified on STA. The final AP scan path after increasing the
 main-task stack is not yet verified from hardware. Captive DNS is NOT IMPLEMENTED.
 
+## mDNS and local request origins
+
+The device announces `camera_hub.local` on active AP/STA IPv4,
+together with a standard-compliant compatibility alias
+`camera-hub.local`. HTTP is on port 80, with a DNS-SD
+`_http._tcp` service. The mDNS name is not an authorization
+bypass: the server still verifies its destination socket address
+matches its own AP or STA address, and limits the `Origin` header
+to either device name or that destination IP. All privileged routes
+retain their existing Bearer token, peer-IP and AP-context checks.
+There is no wildcard CORS policy. Standard DNS hostname labels do
+not permit an underscore; some local resolvers may require the
+compatibility alias. These names are not guaranteed across VLANs.
+
 ## Provisioning Client Contract
 
 The Wi-Fi panel now reads readiness from the AP-local provisioning status route.

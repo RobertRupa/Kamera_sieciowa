@@ -107,6 +107,18 @@ bridge; both ask for the connected serial port.
   See [USB webcam bring-up](docs/usb-uvc.md) and
   [VS Code build/flash](docs/build-flash-vscode.md).
 
+## Local WebGUI address
+
+With the ESP32-P4 + ESP32-C6 Wi-Fi/SDIO link online and a valid AP/STA IP,
+open [http://camera_hub.local/](http://camera_hub.local/) on the local
+network. The firmware also advertises the conventional alias
+[http://camera-hub.local/](http://camera-hub.local/) for clients that
+do not support underscores in hostnames. The `_http._tcp` service
+is advertised on port 80. The ESP32-P4 logs mDNS startup and retries
+transient initialization failures; clients must still support mDNS
+(multicast UDP 5353) on the same link. See
+[validation commands](docs/build-flash-vscode.md#mdns-camera_hublocal-and-the-webgui).
+
 ## Build and Test
 
 From an ESP-IDF 6.1 terminal, prepare the embedded WebGUI once/when changed:

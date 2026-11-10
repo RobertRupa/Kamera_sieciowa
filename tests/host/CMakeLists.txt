@@ -36,6 +36,11 @@ target_include_directories(provisioning_policy_tests PRIVATE "${DOMAIN_COMPONENT
 target_compile_features(provisioning_policy_tests PRIVATE cxx_std_17)
 add_test(NAME provisioning_policy COMMAND provisioning_policy_tests)
 
+add_executable(discovery_names_tests discovery_names_tests.cpp)
+target_include_directories(discovery_names_tests PRIVATE "${DOMAIN_COMPONENT}/include")
+target_compile_features(discovery_names_tests PRIVATE cxx_std_17)
+add_test(NAME discovery_names COMMAND discovery_names_tests)
+
 add_executable(wifi_credential_tests wifi_credential_tests.cpp
     "${DOMAIN_COMPONENT}/src/WifiCredentialCodec.cpp"
     "${DOMAIN_COMPONENT}/src/ProvisioningPolicy.cpp")
@@ -82,7 +87,7 @@ target_include_directories(capability_registry_tests PRIVATE "${CAPABILITY_COMPO
 target_compile_features(capability_registry_tests PRIVATE cxx_std_17)
 add_test(NAME capability_registry COMMAND capability_registry_tests)
 
-foreach(test_target frame_broker_tests profile_policy_tests camera_configuration_tests camera_probe_result_tests provisioning_policy_tests wifi_credential_tests nvs_credential_store_tests network_provisioner_tests network_scan_service_tests capability_registry_tests)
+foreach(test_target frame_broker_tests profile_policy_tests camera_configuration_tests camera_probe_result_tests provisioning_policy_tests wifi_credential_tests nvs_credential_store_tests network_provisioner_tests network_scan_service_tests capability_registry_tests discovery_names_tests)
     if(MSVC)
         target_compile_options(${test_target} PRIVATE /W4 /WX)
     else()

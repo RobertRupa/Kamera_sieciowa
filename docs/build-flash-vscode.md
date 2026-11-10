@@ -37,6 +37,63 @@ The `production` preset uses `build/production` with a separate
 runs `python scripts/prepare_web_assets.py` with the repository as cwd.
 Do not move `firmware/main` or `firmware/components` individually.
 
+## mDNS: camera_hub.local and the WebGUI
+
+The primary mDNS responder name is now **`camera_hub.local`** (exactly,
+with an underscore). The URL for the WebGUI and JSON API on the STA
+network is `http://camera_hub.local/`. The firmware also publishes
+`camera-hub.local` as a standards-compliant compatibility alias.
+The mDNS service registers `_http._tcp` on port **80**.
+
+**Naming note:** underscores are outside the conventional LDH hostname
+syntax, so some DNS/NSS resolvers and browsers may reject
+`camera_hub.local` even if the ESP mDNS responder accepts and
+advertises the label. Use `http://camera-hub.local/` if that happens.
+Alternatively use the actual station IPv4 address. An ordinary DNS
+record or DHCP hostname is not configured by this change.
+
+mDNS is initialized only when the ESP32-P4 has an active Wi-Fi AP or
+station IPv4 address (via the existing ESP32-C6/ESP-Hosted SDIO link).
+The firmware retries transient initialization failure and updates the
+legacy alias when station connectivity replaces provisioning AP.
+It does not modify SDIO GPIO assignments or C6 firmware.
+
+The API's strict HTTP `Origin` check now accepts **only**:
+`http://camera_hub.local`, `http://camera-hub.local` and the exact
+local IPv4 HTTP origin. It still verifies the request's destination IP
+matches the device's current AP or STA IP. It does **not** introduce
+wildcard CORS or authorize foreign origins.
+
+To verify on **Ubuntu connected to the same Wi-Fi network**:
+
+```bash
+sudo apt-get install -y avahi-utils libnss-mdns
+avahi-resolve-host-name camera_hub.local
+avahi-resolve-host-name camera-hub.local
+avahi-browse -rt _http._tcp
+getent ahostsv4 camera_hub.local
+curl --noproxy '*' -i http://camera_hub.local/api/v1/device/status
+```
+
+Some Linux resolver stacks may not resolve underscored hostnames
+through `getent`, even if `avahi-resolve-host-name` sees the mDNS
+response. If the compatible alias works but the canonical name does
+not, that is a client resolver compatibility issue, not necessarily
+an ESP-Hosted transport failure. Ensure that Wi-Fi access-point
+isolation and multicast filtering do not block UDP 5353 to
+224.0.0.251. mDNS is link-local and does not automatically cross
+VLANs/subnets.
+
+On the P4 serial monitor look for:
+
+```text
+mdns_service: mDNS responder initialized as camera_hub.local, HTTP _http._tcp port 80
+mdns_service: mDNS compatibility alias camera-hub.local updated
+```
+
+The log confirms initialization only; check the Ubuntu commands to
+verify real network resolution.
+
 ### USB webcam versus WebGUI configuration
 
 If the USB camera enumerates but the browser shows an old mode, the WebGUI

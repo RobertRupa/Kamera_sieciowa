@@ -6,6 +6,7 @@ import pl from '../locales/pl.json'
 
 describe('device boundary', () => {
   it('accepts an HTTP(S) origin', () => {
+    expect(normalizeDeviceUrl('http://camera_hub.local/')).toBe('http://camera_hub.local')
     expect(normalizeDeviceUrl('http://camera-hub.local/')).toBe('http://camera-hub.local')
     expect(normalizeDeviceUrl('https://192.168.1.2:443')).toBe('https://192.168.1.2')
   })
