@@ -78,9 +78,12 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
   The fifth sensor mode, 800×1280/50, remains selectable in WebGUI.
 - Windows Camera/OBS and Linux V4L2 can use the native webcam interface without
   virtual camera software. The USB sink does not require Wi-Fi to start.
-- **Hardware warning:** verify the actual Waveshare USB OTG connector role jumper,
-  D+/D− wiring, and VBUS before connecting a computer. Use a suitable device-mode
-  connection, never an ordinary host-to-host USB-A cable.
+- **Hardware warning:** Waveshare SKU 30560's two USB-C connectors are
+  programming/serial links, not the P4 HS UVC peripheral. The manufacturer
+  routes direct HS OTG to USB-A socket **1** (jumper **HOST**); jumper
+  **DEVICE** selects the CH334 hub sockets **2–4**. A PC cannot safely be
+  connected by an arbitrary male-A/male-A cable; verify the board-side
+  VBUS switch and use a proper device-mode adapter/breakout first.
 - The ESP-IDF 6.1 build and UVC service initialization have now been observed
   on hardware; **USB host enumeration and higher-than-20-FPS streaming remain
   unverified**. The earlier 20 FPS baseline remains the last measured stream.

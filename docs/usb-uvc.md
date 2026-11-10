@@ -10,18 +10,40 @@ Espressif `usb_device_uvc ~1.3.1` / TinyUSB, MJPEG bulk endpoint.
 This is a native UVC USB device; host systems use their standard webcam
 drivers, without OBS virtual camera software.
 
-**Physical warning:** the board has a Type-A OTG socket and a role jumper.
-Confirm the exact PCB revision/schematic, device-role jumper, USB wiring and
-VBUS before making a host-to-device connection. On the common base board there
-are two Type-C connectors labelled **USB TO UART** (programming/debug) and
-**USB**; the latter is the first candidate for a direct P4 USB connection.
-Test only a connector whose schematic confirms it is routed to the P4 **HS
-OTG** peripheral. The Type-A sockets are associated with the HOST/DEVICE
-jumper and a CH334 hub; the manufacturer FAQ describes the USB port selection.
-A data-capable USB-C cable is preferable when the board routes HS OTG to a
-Type-C device connector. Never join two host Type-A ports with a standard
-A-to-A cable or drive VBUS from two sources. Device routing remains unverified
-on this particular PCB.
+**Waveshare SKU 30560 USB routing (verified against the manufacturer FAQ and
+the three-page schematic):** The two USB-C connectors on this board are for
+USB-UART programming/debug and native P4 USB serial/programming. They are
+**not** routed to the P4's dedicated **High-Speed USB OTG** controller used
+by the UVC firmware. Therefore a serial device appearing on either USB-C port
+is not UVC enumeration.
+
+The four USB-A sockets are numbered as viewed facing the sockets, with the
+Ethernet jack on the **left**:
+
+| Connector | Location | Manufacturer jumper selection |
+| --- | --- | --- |
+| USB-A **1** | Left pair, lower socket (nearest Ethernet) | **HOST** position — direct ESP32-P4 link |
+| USB-A **2–4** | Remaining sockets | **DEVICE** position — CH334 hub path |
+
+**Important:** The jumper switches the **USB data path (direct vs hub)**.
+Its silkscreen is not a reliable indication of the running firmware's USB
+host/device role. In the DEVICE position the direct USB-A 1 path needed for
+UVC device firmware is disconnected. See
+[official Waveshare FAQ](https://docs.waveshare.com/ESP32-P4-Module-DEV-KIT/FAQ),
+[port numbering photo](https://docs.waveshare.com/assets/images/ESP32-P4-USB-6848eed08e2e1a2477a910ccc822e6c4.webp)
+and [schematic](https://files.waveshare.com/wiki/ESP32-P4-Module-DEV-KIT/ESP32-P4-Module-DEV-KIT.pdf).
+
+**Electrical safety:** USB-A female to USB-A female is not a conventional
+device connection. Do **not** join the PC's USB-A host to the board's Type-A
+receptacle using an ordinary male-A/male-A cable: board-side VBUS output and
+PC-side VBUS may conflict. The correct bench solution requires checking the
+actual schematic, the Type-A port-1 VBUS/USB power switch, data routing and
+whether host VBUS is safely sensed by the UVC device. Use a verified
+**device-mode breakout/adapter** with correct D+/D-, GND and VBUS
+management (or an appropriate hardware modification) before connecting
+the PC. Simply moving the jumper is not enough to guarantee electrical
+USB device compatibility. The other USB-A sockets routed through CH334
+will not enumerate the P4's native UVC endpoint.
 
 ## First bring-up: Linux host cannot detect a webcam
 
@@ -30,7 +52,7 @@ on this particular PCB.
    **not** that the host enumerated the device.
 2. Check the physical USB route (device-role jumper, correct direct OTG data
    connector, good USB 2.0 high-speed data cable, host-side VBUS sensing).
-   A Type-C-to-USB-UART programming cable is not a UVC data connection.
+   A USB-C programming/serial link on this board is not a P4 HS UVC link.
    Waveshare's FAQ notes that the Type-A ports are switched between direct
    connection and the CH334 hub; do not treat any Type-A port as a safe
    standard host-to-host cable attachment.
