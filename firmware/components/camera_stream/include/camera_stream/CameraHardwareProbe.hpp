@@ -33,6 +33,10 @@ public:
     // USB subscribers receive the same immutable hardware-encoded JPEG frames.
     [[nodiscard]] esp_err_t startUsbStream(int width, int height, int fps) noexcept;
     void stopUsbStream() noexcept;
+    // Called after the host has stopped or disconnected (not during re-COMMIT).
+    // The capture task restores the user's pre-USB sensor configuration.
+    void requestUsbProfileRestore() noexcept;
+    [[nodiscard]] bool usbStreaming() const noexcept;
     [[nodiscard]] camera_hub::FrameLease tryTakeUsbFrame() noexcept;
     void subscribeHttp() noexcept;
     void unsubscribeHttp() noexcept;

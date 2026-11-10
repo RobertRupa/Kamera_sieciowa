@@ -22,9 +22,12 @@
 #endif
 
 namespace {
-[[noreturn]] void keepUsbAliveWithoutNetwork() noexcept {
+[[noreturn]] void keepUsbAliveWithoutNetwork(usb_uvc_service::UsbUvcService& usbUvc) noexcept {
     ESP_LOGW("camera_hub", "Network unavailable; maintaining camera and USB UVC service");
-    for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
+    for (;;) {
+        usbUvc.pollConnection();
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
 }
 } // namespace
 
@@ -129,15 +132,15 @@ extern "C" void app_main() {
     const auto wifiResult = wifi.startProvisioning(prerequisites, "CAMERA-HUB-SETUP");
     if (wifiResult != ESP_OK) {
         ESP_LOGW("camera_hub", "Provisioning start refused: %s", esp_err_to_name(wifiResult));
-        keepUsbAliveWithoutNetwork();
+        keepUsbAliveWithoutNetwork(usbUvc);
     }
     if (!wifi.waitForAp(pdMS_TO_TICKS(5000)) || wifi.apAddress() == 0) {
         ESP_LOGW("camera_hub", "Provisioning AP did not become ready");
-        keepUsbAliveWithoutNetwork();
+        keepUsbAliveWithoutNetwork(usbUvc);
     }
     if (api.start(prerequisites, wifi.apAddress()) != ESP_OK) {
         ESP_LOGW("camera_hub", "Provisioning AP or HTTP start failed");
-        keepUsbAliveWithoutNetwork();
+        keepUsbAliveWithoutNetwork(usbUvc);
     }
     std::int64_t deadline = 0;
     std::int64_t scanDeadline = 0;
@@ -162,6 +165,7 @@ extern "C" void app_main() {
     const auto discoveryResult = mdns.start("camera-hub", wifi.apAddress() != 0, 80);
     if (discoveryResult != ESP_OK) ESP_LOGW("camera_hub", "mDNS start failed: %s", esp_err_to_name(discoveryResult));
     for (;;) {
+        usbUvc.pollConnection();
         if (scanService.isScanning() && scanService.operationId() != scanOperationId) {
             scanOperationId = scanService.operationId();
             scanDeadline = esp_timer_get_time() + 20000000;

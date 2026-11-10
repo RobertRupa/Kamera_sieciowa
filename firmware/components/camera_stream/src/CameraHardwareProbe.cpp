@@ -155,6 +155,9 @@ struct CameraHardwareProbe::State {
     std::size_t httpSubscribers{0};
     std::atomic<bool> networkEnabled{false};
     std::atomic<bool> usbActive{false};
+    std::atomic<bool> usbRestoreRequested{false};
+    camera_hub::CameraSettings preUsbSettings{};
+    bool preUsbSettingsValid{false};  // protected by configurationMutex
     std::atomic<bool> keyFrameRequested{false};
     mutable std::mutex configurationMutex;
     camera_hub::CameraConfiguration configuration{};
@@ -473,6 +476,29 @@ void CameraHardwareProbe::captureTask() noexcept {
     std::int64_t configurationDeadline = 0;
     camera_hub::CameraSettings rollbackSettings{};
     while (state.running.load()) {
+        // Only the capture task may queue a restoration; wait until any USB
+        // reconfiguration has finished. A new COMMIT cancels a pending restore.
+        if (state.usbRestoreRequested.load() && !state.usbActive.load()) {
+            const std::lock_guard<std::mutex> lock(state.configurationMutex);
+            if (!state.usbActive.load() &&
+                state.configuration.state != camera_hub::ConfigurationState::Queued &&
+                state.configuration.state != camera_hub::ConfigurationState::Applying) {
+                if (state.preUsbSettingsValid) {
+                    const auto& saved = state.preUsbSettings;
+                    const auto& current = state.configuration.settings;
+                    if (saved.modeId != current.modeId || saved.previewFps != current.previewFps ||
+                        saved.codec != current.codec || saved.jpegQuality != current.jpegQuality ||
+                        saved.h264Bitrate != current.h264Bitrate) {
+                        state.requestedSettings = saved;
+                        state.configuration.state = camera_hub::ConfigurationState::Queued;
+                        ESP_LOGI(kTag, "USB closed: restoring previous sensor mode=%lu",
+                                 static_cast<unsigned long>(saved.modeId));
+                    }
+                    state.preUsbSettingsValid = false;
+                }
+                state.usbRestoreRequested.store(false);
+            }
+        }
         camera_hub::CameraSettings requested{};
         camera_hub::CameraSettings previous{};
         bool apply = false;
@@ -685,7 +711,8 @@ esp_err_t CameraHardwareProbe::requestConfiguration(const camera_hub::CameraSett
     if (state_ == nullptr || !state_->running.load()) return ESP_ERR_INVALID_STATE;
     const std::lock_guard<std::mutex> lock(state_->configurationMutex);
     auto& configuration = state_->configuration;
-    if (state_->usbActive.load()) return ESP_ERR_INVALID_STATE;
+    if (state_->usbActive.load() || state_->preUsbSettingsValid)
+        return ESP_ERR_INVALID_STATE;
     if (!camera_hub::validCameraSettings(configuration, settings)) return ESP_ERR_INVALID_ARG;
     if (configuration.state == camera_hub::ConfigurationState::Queued ||
         configuration.state == camera_hub::ConfigurationState::Applying) return ESP_ERR_INVALID_STATE;
@@ -781,6 +808,11 @@ esp_err_t CameraHardwareProbe::startUsbStream(int width, int height, int fps) no
         requested.codec = camera_hub::VideoCodec::Jpeg;
         if (!camera_hub::validCameraSettings(state.configuration, requested))
             return ESP_ERR_NOT_SUPPORTED;
+        if (!state.preUsbSettingsValid) {
+            state.preUsbSettings = state.configuration.settings;
+            state.preUsbSettingsValid = true;
+        }
+        state.usbRestoreRequested.store(false);
         if (requested.modeId != state.configuration.settings.modeId ||
             requested.codec != state.configuration.settings.codec ||
             requested.previewFps != state.configuration.settings.previewFps) {
@@ -797,6 +829,14 @@ void CameraHardwareProbe::stopUsbStream() noexcept {
     if (state_ == nullptr || state_->broker == nullptr) return;
     state_->usbActive.store(false);
     state_->broker->setEnabled(camera_hub::Output::Usb, false);
+}
+
+void CameraHardwareProbe::requestUsbProfileRestore() noexcept {
+    if (state_ != nullptr) state_->usbRestoreRequested.store(true);
+}
+
+bool CameraHardwareProbe::usbStreaming() const noexcept {
+    return state_ != nullptr && state_->usbActive.load();
 }
 
 camera_hub::FrameLease CameraHardwareProbe::tryTakeUsbFrame() noexcept {

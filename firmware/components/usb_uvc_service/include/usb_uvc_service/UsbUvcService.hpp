@@ -18,6 +18,8 @@ public:
     UsbUvcService& operator=(const UsbUvcService&) = delete;
     [[nodiscard]] esp_err_t start() noexcept;
     [[nodiscard]] bool ready() const noexcept { return initialized_; }
+    // Call periodically from app_main, including when network setup is offline.
+    void pollConnection() noexcept;
 private:
     static esp_err_t onStart(uvc_format_t format, int width, int height,
                             int rate, void* context);
@@ -30,6 +32,8 @@ private:
     uvc_fb_t frame_{};
     std::uint8_t* transferBuffer_{nullptr};
     std::atomic<bool> streaming_{false};
+    std::atomic<std::int64_t> lastCommitUs_{0};
+    std::atomic<std::int64_t> stoppedAtUs_{0};
     bool initialized_{false};
     int requestedWidth_{0};
     int requestedHeight_{0};

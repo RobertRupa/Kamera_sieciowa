@@ -4,6 +4,9 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#if CONFIG_APP_USB_UVC_ENABLE
+#include "tusb.h"
+#endif
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -81,6 +84,8 @@ esp_err_t UsbUvcService::onStart(uvc_format_t format, int width, int height,
         service.requestedWidth_ = width;
         service.requestedHeight_ = height;
         service.requestedFps_ = rate;
+        service.stoppedAtUs_.store(0);
+        service.lastCommitUs_.store(esp_timer_get_time());
         service.streaming_.store(true);
         ESP_LOGI(kTag, "UVC COMMIT %dx%d @ %d nominal sensor FPS", width, height, rate);
     }
@@ -149,9 +154,35 @@ void UsbUvcService::onReturnFrame(uvc_fb_t* frame, void* context) {
 
 void UsbUvcService::onStop(void* context) {
     auto& service = *static_cast<UsbUvcService*>(context);
-    service.streaming_.store(false);
+    const bool wasStreaming = service.streaming_.exchange(false);
     service.camera_.stopUsbStream();
+    service.stoppedAtUs_.store(esp_timer_get_time());
+    if (wasStreaming) ESP_LOGI(kTag, "UVC stream stopped; pending host disconnect/re-COMMIT");
     // onReturnFrame owns the lease until the UVC task finishes memcpy.
+}
+
+void UsbUvcService::pollConnection() noexcept {
+#if CONFIG_APP_USB_UVC_ENABLE
+    if (!initialized_) return;
+    const auto now = esp_timer_get_time();
+    // usb_device_uvc 1.3.1 logs unmount but does not invoke stop_cb there.
+    // This path also detects when an application closes /dev/videoX.
+    if (streaming_.load() && now - lastCommitUs_.load() >= 1000000 &&
+        (!tud_mounted() || !tud_video_n_streaming(0, 0))) {
+        ESP_LOGI(kTag, "USB host streaming ended (mounted=%d); releasing camera",
+                 static_cast<int>(tud_mounted()));
+        onStop(this);
+    }
+    auto stoppedAt = stoppedAtUs_.load();
+    if (!streaming_.load() && stoppedAt != 0 && now - stoppedAt >= 1000000) {
+        // Stop callback also fires immediately before a new COMMIT; the grace
+        // period avoids restoring the user's mode between USB renegotiations.
+        if (stoppedAtUs_.compare_exchange_strong(
+                stoppedAt, 0)) {
+            camera_.requestUsbProfileRestore();
+        }
+    }
+#endif
 }
 
 } // namespace usb_uvc_service
