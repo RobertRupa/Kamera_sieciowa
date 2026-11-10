@@ -37,6 +37,41 @@ The `production` preset uses `build/production` with a separate
 runs `python scripts/prepare_web_assets.py` with the repository as cwd.
 Do not move `firmware/main` or `firmware/components` individually.
 
+### Board profile: ESP32-P4 + ESP32-C6 over SDIO
+
+`default` is the main profile for **Waveshare ESP32-P4-Module-DEV-KIT
+(SKU 30560)**, incorporating ESP32-P4 and its onboard ESP32-C6 radio
+coprocessor. ESP-IDF compiles **ESP32-P4** firmware (`IDF_TARGET=esp32p4`).
+There is no Espressif IDF compilation target called `esp32p4+c6`.
+The ESP32-C6 retains its existing ESP-Hosted 3.1.0 firmware and P4-to-C6
+four-bit SDIO wiring; these USB flash actions do not flash the C6.
+
+Both board Type-C programming interfaces support an ESP-IDF/esptool serial
+flash transport (the corresponding OS port can be `/dev/ttyACM*` or
+`/dev/ttyUSB*` based on the interface). **Neither is the HS USB-A UVC
+data port.** In VS Code, run one of:
+
+- **ESP32-P4+C6: Flash + Monitor via USB Serial/JTAG**
+- **ESP32-P4+C6: Flash + Monitor via UART bridge**
+
+Each task prompts for an actual port so no per-computer serial path is
+committed. Identify ports with `ls -l /dev/serial/by-id/` or
+`python -m serial.tools.list_ports -v`.
+
+From a terminal in the repository root, choose the port explicitly:
+
+```bash
+idf.py --preset default build
+idf.py --preset default -p /dev/ttyACM0 flash monitor  # example native USB
+# or
+idf.py --preset default -p /dev/ttyUSB0 flash monitor  # example bridge UART
+```
+
+The P4 ROM may require BOOT+RESET to enter download mode if automatic
+reset is not available on the selected programming port. The flash
+method is serial in both cases; changing to the HS UVC connector is not
+a supported alternative for `idf.py flash`.
+
 ### Repair an incomplete root CMake build
 
 If Set Target prints

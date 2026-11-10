@@ -18,7 +18,7 @@ embedded WebGUI decoded a live frame. `http_mjpeg=ready`; the board-level
 `camera` capability remains `unverified` pending PCB revision and sustained
 operation checks. See [latest verification](docs/verification.md).
 
-Development firmware for one MIPI-CSI camera on a Waveshare ESP32-P4-Module-DEV-KIT.
+Development firmware for one MIPI-CSI camera on a Waveshare ESP32-P4-Module-DEV-KIT with an ESP32-C6 Wi-Fi/BLE coprocessor connected by the existing SDIO bus.
 The current unit has a verified OV5647 preview over HTTP MJPEG and a packaged
 device-side WebGUI, driver-derived runtime configuration, and RTP/UDP streams.
 USB UVC hardware validation, simultaneous second-camera capture, IMX219 support, production authentication,
@@ -69,6 +69,12 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
 	frame are observed, while PCB revision, module revision and sustained camera
 	readiness remain explicitly unverified.
 
+The main `default` board profile is **Waveshare ESP32-P4 + ESP32-C6
+(SDIO)**. Firmware builds and flashes to ESP32-P4, while the ESP32-C6
+remains an onboard ESP-Hosted coprocessor with unchanged SDIO wiring.
+VS Code has P4 flash/monitor tasks for native USB Serial/JTAG and USB-UART
+bridge; both ask for the connected serial port.
+
 ## USB UVC Webcam (experimental branch)
 
 - ESP32-P4 USB 2.0 **High-Speed OTG device** class, using Espressif
@@ -84,9 +90,10 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
   **DEVICE** selects the CH334 hub sockets **2–4**. A PC cannot safely be
   connected by an arbitrary male-A/male-A cable; verify the board-side
   VBUS switch and use a proper device-mode adapter/breakout first.
-- The ESP-IDF 6.1 build and UVC service initialization have now been observed
-  on hardware; **USB host enumeration and higher-than-20-FPS streaming remain
-  unverified**. The earlier 20 FPS baseline remains the last measured stream.
+- ESP-IDF 6.1 build, USB 2.0 High-Speed enumeration (`303a:8000`) and
+  Linux `uvcvideo` binding are now observed. **Actual UVC FPS remains
+  unmeasured**. The second capture-loop FPS gate is removed and the new
+  5-second CSI/JPEG/USB feeder counters aid performance diagnosis.
 - Development Wi-Fi setup requires the P4/C6 transport-wiring and open-AP
   gates. `sdkconfig.dev.defaults` enables them for the previously tested SDIO
   wiring, but any existing generated `build/default/sdkconfig` may retain

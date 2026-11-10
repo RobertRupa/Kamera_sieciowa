@@ -102,6 +102,58 @@ then `idf.py --preset default build flash monitor`. On boot check
 initialization then fails in ESP-Hosted/SDIO, inspect the **first**
 `wifi_service` or `esp_hosted` error; it is a separate issue.
 
+## Observed USB host detection and throughput diagnosis
+
+Linux has now **enumerated the native USB 2.0 High-Speed UVC 1.5 device**:
+`303a:8000`, product `ESP32-P4 OV5647 UVC`; `uvcvideo` bound to it.
+This confirms USB enumeration and the device-side descriptor path, **not**
+the effective webcam frame rate. The board is a single Waveshare development
+board containing an ESP32-P4 host application and an onboard ESP32-C6 SDIO
+radio coprocessor. The C6 SDIO transport and ESP-Hosted firmware are unchanged.
+
+The capture loop previously applied an additional timestamp check at exactly
+`1 / sensor_fps` **on top of** V4L2 sensor pacing. Small jitter could
+cause an otherwise good frame to be skipped, reducing FPS (sometimes close to
+half the sensor nominal rate). That second limiter is removed. The
+UVС path still depends on the hardware JPEG encoder, copying to bounded
+FrameBroker slots and a separate UVC transfer buffer; advertised rates
+are **not** guaranteed.
+
+For a reproducible Linux benchmark:
+
+```bash
+sudo apt-get install -y v4l-utils ffmpeg
+v4l2-ctl --list-devices
+# Set this to the actual video-capture node, not a metadata node.
+VIDEO=/dev/video0
+v4l2-ctl -d "$VIDEO" --list-formats-ext
+# Use a listed format/rate, then measure delivered frames for 15 seconds.
+ffmpeg -hide_banner -f v4l2 -input_format mjpeg \
+  -video_size 800x800 -framerate 50 -i "$VIDEO" \
+  -t 15 -c:v copy -f null -
+```
+
+Watch the ESP32-P4 serial console **at the same time**. After the host
+opens a stream you should see `UVC COMMIT`, then once every 5 s:
+
+- `UVC CSI 5s: captured=... encoded=... published=...`
+  measures CSI capture, successful JPEG encodes and FrameBroker publishes;
+  `avg_encode` indicates encoder work time (microseconds per frame)
+- `UVC feeder 5s: frames=... (fps=...)` measures completed frame callbacks
+  accepted for delivery by the UVC driver, **not actual confirmed host FPS**
+
+Compare with FFmpeg's received frame count. For example, about 750 frames
+in 15 s means ~50 delivered FPS; this is an example, not a benchmark claim.
+If `captured` is slow, investigate camera/ISP, buffer requeue, and SDIO
+contention; if `encoded` is slower than capture, investigate JPEG encoder
+and memory; if `UVC feeder` is much lower than `published`, inspect the
+USB driver, payload size and host scheduling. If the feeder rate is high but
+FFmpeg receives fewer frames, inspect USB transfer throughput and host errors.
+
+Do not increase the descriptor's advertised FPS to mask a slow pipeline;
+measure first. In particular, USB MJPEG Bulk transfer is limited by encoded
+frame size and the host's USB bus scheduling.
+
 ## Sensor mode vs actual delivered FPS
 
 The firmware no longer limits camera publication to 20 FPS. The source
@@ -153,9 +205,9 @@ idf.py --preset default -p /dev/ttyACM0 flash monitor # choose actual programmin
 In Windows use your selected `COMx` port in place of `/dev/ttyACM0`.
 Do not erase flash/eFuses or write backup images as part of normal flashing.
 
-The new UVC component changes the dependency graph. Regenerate and inspect
-`dependencies.lock` at the repository root by running IDF Component Manager on a machine
-with network access and ESP-IDF 6.1; this step remains pending here.
+The UVC component and dependency lockfile live in the repository root. The
+ESP-IDF 6.1 build and UVC enumeration were confirmed on device; camera stream
+throughput remains pending benchmark validation.
 
 ## Host verification checklist (not yet executed)
 
