@@ -98,7 +98,7 @@ bridge; both ask for the connected serial port.
   the previous sensor mode. WebGUI polls live USB ownership, supports
   lab-only camera settings login (admin/admin in the `default` development
   preset), and explicitly labels nominal FPS. While USB UVC is active,
-  browser MJPEG is limited to 10 FPS to prioritize the USB webcam.
+  browser MJPEG is limited to 20 FPS by default to prioritize the USB webcam.
 - Development Wi-Fi setup requires the P4/C6 transport-wiring and open-AP
   gates. `sdkconfig.dev.defaults` enables them for the previously tested SDIO
   wiring, but any existing generated `build/default/sdkconfig` may retain

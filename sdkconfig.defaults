@@ -60,3 +60,6 @@ CONFIG_TUSB_MANUFACTURER="Camera Hub"
 CONFIG_TUSB_PRODUCT="ESP32-P4 OV5647 UVC"
 
 CONFIG_IDF_TARGET="esp32p4"
+
+# Prioritize UVC while retaining a reasonably smooth browser preview.
+CONFIG_APP_HTTP_MJPEG_FPS_WHILE_UVC=20

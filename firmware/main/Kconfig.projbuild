@@ -35,6 +35,16 @@ config APP_USB_UVC_ENABLE
         Requires verified OTG device jumper and connector VBUS routing.
         USB webcam enumeration is independent of Wi-Fi or the setup AP.
 
+config APP_HTTP_MJPEG_FPS_WHILE_UVC
+    int "Maximum HTTP MJPEG preview FPS while USB UVC is active"
+    depends on APP_USB_UVC_ENABLE
+    range 1 50
+    default 20
+    help
+        Throttle only HTTP browser preview delivery while USB owns the
+        sensor to reduce P4/C6 SDIO and PSRAM contention. Does not limit
+        USB camera frames. USB and HTTP share a single hardware encoder.
+
 config APP_CAMERA_PROBE_ON_BOOT
     bool "Run a one-frame MIPI-CSI hardware probe at boot"
     depends on APP_DEV_MODE && APP_CAMERA_OV5647_DRIVER

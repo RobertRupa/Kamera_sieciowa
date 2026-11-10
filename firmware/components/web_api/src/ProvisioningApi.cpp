@@ -503,9 +503,9 @@ esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     api.cameraStream_.subscribeHttp();
 
-    // Cap only the HTTP MJPEG preview to 10 fps while USB UVC is active.
-    // This avoids saturating P4<->C6 SDIO and PSRAM bandwidth with a second
-    // full-rate output while USB uses the same JPEG frames.
+    // Throttle only browser MJPEG while USB is active. This avoids excessive
+    // Wi-Fi/SDIO writes while the USB host receives the full sensor stream.
+    // The default is 20 fps (Kconfig); unrelated HTTP-only preview is uncapped.
     std::uint64_t lastHttpTimestampUs = 0;
     esp_err_t result = ESP_OK;
         while (api.cameraStream_.captureStatus().running &&
@@ -516,8 +516,11 @@ esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
             continue;
         }
         if (frame.codec() != camera_hub::VideoCodec::Jpeg) continue;
+#if CONFIG_APP_USB_UVC_ENABLE
         if (api.cameraStream_.usbStreaming() && lastHttpTimestampUs != 0 &&
-            frame.timestampUs() - lastHttpTimestampUs < 100000) continue;
+            frame.timestampUs() - lastHttpTimestampUs <
+                1000000ULL / CONFIG_APP_HTTP_MJPEG_FPS_WHILE_UVC) continue;
+#endif
 
         std::array<char, 112> partHeader{};
         const int headerSize = std::snprintf(partHeader.data(), partHeader.size(),

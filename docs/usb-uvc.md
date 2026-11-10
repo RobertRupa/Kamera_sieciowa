@@ -128,8 +128,9 @@ The check runs even when P4↔C6 provisioning is unavailable.
   stream end it unlocks following restoration; the former mode is restored.
 - The WebGUI displays *nominal sensor FPS*, not measured USB throughput.
 - Browser MJPEG uses the newest buffered frame. While USB is active, HTTP
-  preview delivery is limited to **10 FPS** to prioritize USB transport
-  and avoid a second full-rate Wi-Fi/SDIO output. USB itself is **not**
+  preview delivery is limited to **20 FPS** by default to prioritize USB transport
+  and avoid a second full-rate Wi-Fi/SDIO output. Adjust the cap with
+  `APP_HTTP_MJPEG_FPS_WHILE_UVC` under **Camera Hub** in menuconfig. USB itself is **not**
   rate limited by this cap.
 - Editing a camera no longer depends on RTSP/UDP being ready.
 - The `default` development profile enables a **test-only admin/admin**

@@ -43,7 +43,7 @@ If the USB camera enumerates but the browser shows an old mode, the WebGUI
 must poll the camera configuration API. The current frontend refreshes live
 USB ownership, sensor mode and nominal FPS. On UVC host disconnect the P4
 releases the USB lock and restores the pre-USB mode; no P4 reset is required.
-Browser HTTP MJPEG is capped at 10 FPS while USB is active to give USB
+Browser HTTP MJPEG is capped at 20 FPS by default while USB is active to give USB
 priority. This cap does **not** affect the USB sensor/transfer target.
 
 If WebGUI settings remain disabled after unplugging the host, check whether
