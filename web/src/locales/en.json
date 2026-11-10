@@ -117,5 +117,6 @@
   "state": "State",
   "camera_usb_locked": "USB UVC currently controls the sensor. When streaming ends, the previous settings will be restored and editing will be available again.",
   "camera_login_disabled": "Settings editing is locked: development login is disabled in the firmware.",
-  "camera_busy": "Camera is busy with USB UVC or a mode change. Try again when streaming stops."
+  "camera_busy": "Camera is busy with USB UVC or a mode change. Try again when streaming stops.",
+  "nominal": "nominal"
 }

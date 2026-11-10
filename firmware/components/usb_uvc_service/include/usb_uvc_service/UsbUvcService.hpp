@@ -33,6 +33,7 @@ private:
     std::uint8_t* transferBuffer_{nullptr};
     std::atomic<bool> streaming_{false};
     std::atomic<std::int64_t> lastCommitUs_{0};
+    std::atomic<std::int64_t> lastFrameRequestUs_{0};
     std::atomic<std::int64_t> stoppedAtUs_{0};
     bool initialized_{false};
     int requestedWidth_{0};

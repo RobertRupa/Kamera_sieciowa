@@ -29,7 +29,7 @@ const detectedModule = computed(() => {
 const detectedSensor = computed(() => device.status?.camera_hardware?.sensor ?? t('unknown'))
 const captureProfile = computed(() => {
   const camera = device.status?.camera
-  return camera ? `${camera.width} × ${camera.height} · ${camera.fps} FPS` : t('unknown')
+  return camera ? `${camera.width} × ${camera.height} · ${camera.fps} FPS (${t('nominal')})` : t('unknown')
 })
 const cameraProbeStatus = computed(() => {
   const state = device.status?.camera_probe_state
@@ -50,7 +50,7 @@ const cameraProbeStatus = computed(() => {
         <img v-if="device.streamUrl" :src="device.streamUrl" :alt="t('preview')" @error="device.streamError = true" />
         <div v-else class="video-empty"><i class="pi pi-video" aria-hidden="true"></i><strong>{{ device.status?.camera?.codec === 'h264' ? 'H.264 / RTP' : t(device.pending ? 'connecting' : device.streamError ? 'stream_unavailable' : 'no_signal') }}</strong></div>
       </div>
-      <div class="monitor-footer"><span><i class="pi pi-circle-fill" aria-hidden="true"></i> {{ device.status?.camera?.codec === 'h264' ? 'H.264' : 'MJPEG' }}</span><span v-if="device.status?.camera">{{ device.status.camera.width }} × {{ device.status.camera.height }} · {{ device.status.camera.fps }} FPS</span><span v-else>{{ t('unknown') }}</span></div>
+      <div class="monitor-footer"><span><i class="pi pi-circle-fill" aria-hidden="true"></i> {{ device.status?.camera?.codec === 'h264' ? 'H.264' : 'MJPEG' }}</span><span v-if="device.status?.camera">{{ device.status.camera.width }} × {{ device.status.camera.height }} · {{ device.status.camera.fps }} FPS ({{ t('nominal') }})</span><span v-else>{{ t('unknown') }}</span></div>
     </section>
     <aside class="output-panel">
       <section :aria-label="t('camera_status')">

@@ -85,7 +85,9 @@ esp_err_t UsbUvcService::onStart(uvc_format_t format, int width, int height,
         service.requestedHeight_ = height;
         service.requestedFps_ = rate;
         service.stoppedAtUs_.store(0);
-        service.lastCommitUs_.store(esp_timer_get_time());
+        const auto commitUs = esp_timer_get_time();
+        service.lastCommitUs_.store(commitUs);
+        service.lastFrameRequestUs_.store(commitUs);
         service.streaming_.store(true);
         ESP_LOGI(kTag, "UVC COMMIT %dx%d @ %d nominal sensor FPS", width, height, rate);
     }
@@ -101,6 +103,7 @@ uvc_fb_t* UsbUvcService::onGetFrame(void* context) {
         return nullptr;
     }
     const auto nowUs = esp_timer_get_time();
+    service.lastFrameRequestUs_.store(nowUs);
     if (service.metricsStartedUs_ == 0) service.metricsStartedUs_ = nowUs;
     if (nowUs - service.metricsStartedUs_ >= 5000000) {
         const auto elapsed = static_cast<std::uint64_t>(nowUs - service.metricsStartedUs_);
@@ -168,9 +171,10 @@ void UsbUvcService::pollConnection() noexcept {
     // usb_device_uvc 1.3.1 logs unmount but does not invoke stop_cb there.
     // This path also detects when an application closes /dev/videoX.
     if (streaming_.load() && now - lastCommitUs_.load() >= 1000000 &&
-        (!tud_mounted() || !tud_video_n_streaming(0, 0))) {
-        ESP_LOGI(kTag, "USB host streaming ended (mounted=%d); releasing camera",
-                 static_cast<int>(tud_mounted()));
+        (!tud_mounted() || !tud_video_n_streaming(0, 0) ||
+         now - lastFrameRequestUs_.load() >= 4000000)) {
+        ESP_LOGI(kTag, "USB host streaming ended/stalled (mounted=%d, streaming=%d); releasing camera",
+                 static_cast<int>(tud_mounted()), static_cast<int>(tud_video_n_streaming(0, 0)));
         onStop(this);
     }
     auto stoppedAt = stoppedAtUs_.load();

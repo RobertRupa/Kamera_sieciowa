@@ -64,14 +64,18 @@ async function refreshCamera() {
   if (!selected.value) return
   const current = generation
   try {
-    const [config, network] = await Promise.all([
-      getCameraConfiguration(device.base, selected.value), getCameraUdp(device.base, selected.value),
-    ])
-    if (current !== generation) return
+    const cameraId = selected.value
+    const config = await getCameraConfiguration(device.base, cameraId)
+    if (current !== generation || cameraId !== selected.value) return
     acceptConfiguration(config)
-    udp.value = network
-    udpEnabled.value = network.enabled
-    udpPort.value = network.port
+    // UDP/RTSP availability must not prevent changing the sensor mode.
+    try {
+      const network = await getCameraUdp(device.base, cameraId)
+      if (current !== generation || cameraId !== selected.value) return
+      udp.value = network
+      udpEnabled.value = network.enabled
+      udpPort.value = network.port
+    } catch { udp.value = null }
   } catch { if (current === generation) message.value = 'camera_configuration_unavailable' }
 }
 

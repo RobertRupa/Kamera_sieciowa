@@ -117,5 +117,6 @@
   "state": "Stan",
   "camera_usb_locked": "USB UVC steruje teraz sensorem. Po zakończeniu strumienia poprzednie ustawienia zostaną przywrócone; edycja będzie ponownie dostępna.",
   "camera_login_disabled": "Edycja ustawień jest zablokowana: logowanie developerskie nie jest włączone w firmware.",
-  "camera_busy": "Kamera jest zajęta przez USB UVC lub trwa zmiana trybu. Spróbuj ponownie po zakończeniu transmisji."
+  "camera_busy": "Kamera jest zajęta przez USB UVC lub trwa zmiana trybu. Spróbuj ponownie po zakończeniu transmisji.",
+  "nominal": "nominalnie"
 }
