@@ -1,5 +1,16 @@
 menu "Camera Hub"
 
+config APP_BOARD_WAVESHARE_P4_C6_SDIO
+    bool "Waveshare ESP32-P4 + ESP32-C6 (SDIO coprocessor)"
+    depends on IDF_TARGET_ESP32P4
+    default y
+    help
+        ESP32-P4 is the only application build/flash target. ESP32-C6 is an
+        onboard Wi-Fi/BLE coprocessor running independently, connected by
+        the existing 4-bit SDIO and ESP-Hosted configuration. This board
+        identity does not flash or reconfigure the C6.
+
+
 config APP_DEV_MODE
     bool "Development diagnostic firmware"
     default y

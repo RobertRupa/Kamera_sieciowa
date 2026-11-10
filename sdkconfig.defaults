@@ -1,3 +1,5 @@
+# Primary firmware target is ESP32-P4; ESP32-C6 is the pre-existing SDIO radio coprocessor.
+CONFIG_APP_BOARD_WAVESHARE_P4_C6_SDIO=y
 CONFIG_LWIP_MAX_SOCKETS=16
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="firmware/partitions.csv"

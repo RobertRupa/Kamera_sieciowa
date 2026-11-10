@@ -46,6 +46,11 @@ extern "C" void app_main() {
                  static_cast<unsigned int>(storeResult), esp_err_to_name(credentialStore.lastPlatformError()));
     }
     const board_support::BoardConfig board;
+#if CONFIG_APP_BOARD_WAVESHARE_P4_C6_SDIO
+    ESP_LOGI("camera_hub",
+             "board=Waveshare ESP32-P4 + ESP32-C6, target=esp32p4, "
+             "radio=esp32c6 via existing ESP-Hosted 4-bit SDIO");
+#endif
     camera_stream::CameraHardwareProbe cameraProbe;
     const auto cameraProbeResult = cameraProbe.run();
     ESP_LOGI("camera_hub", "camera probe=%s sensor=%s frame=%ux%u bytes=%lu",

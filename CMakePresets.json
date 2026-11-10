@@ -8,8 +8,8 @@
   "configurePresets": [
     {
       "name": "default",
-      "displayName": "Default (Root ESP32-P4 development)",
-      "description": "Build Kamera_sieciowa/ repository root; sources in firmware/",
+      "displayName": "Waveshare ESP32-P4 + ESP32-C6 (SDIO) — development",
+      "description": "ESP-IDF target esp32p4; ESP32-C6 radio coprocessor over SDIO via ESP-Hosted",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/default",
       "cacheVariables": {
@@ -37,8 +37,8 @@
     },
     {
       "name": "production",
-      "displayName": "Production (Root ESP32-P4)",
-      "description": "Build Kamera_sieciowa/ repository root; sources in firmware/",
+      "displayName": "Waveshare ESP32-P4 + ESP32-C6 (SDIO) — production",
+      "description": "ESP-IDF target esp32p4; ESP32-C6 radio coprocessor over SDIO via ESP-Hosted",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/production",
       "cacheVariables": {
