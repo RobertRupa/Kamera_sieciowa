@@ -36,7 +36,8 @@ target_include_directories(provisioning_policy_tests PRIVATE "${DOMAIN_COMPONENT
 target_compile_features(provisioning_policy_tests PRIVATE cxx_std_17)
 add_test(NAME provisioning_policy COMMAND provisioning_policy_tests)
 
-add_executable(discovery_names_tests discovery_names_tests.cpp)
+add_executable(discovery_names_tests discovery_names_tests.cpp
+    "${DOMAIN_COMPONENT}/src/ProvisioningPolicy.cpp")
 target_include_directories(discovery_names_tests PRIVATE "${DOMAIN_COMPONENT}/include")
 target_compile_features(discovery_names_tests PRIVATE cxx_std_17)
 add_test(NAME discovery_names COMMAND discovery_names_tests)
