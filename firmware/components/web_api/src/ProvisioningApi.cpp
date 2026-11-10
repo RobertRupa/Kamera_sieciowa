@@ -503,6 +503,10 @@ esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     api.cameraStream_.subscribeHttp();
 
+    // Cap only the HTTP MJPEG preview to 10 fps while USB UVC is active.
+    // This avoids saturating P4<->C6 SDIO and PSRAM bandwidth with a second
+    // full-rate output while USB uses the same JPEG frames.
+    std::uint64_t lastHttpTimestampUs = 0;
     esp_err_t result = ESP_OK;
         while (api.cameraStream_.captureStatus().running &&
             api.cameraStream_.captureStatus().codec == camera_hub::VideoCodec::Jpeg) {
@@ -512,6 +516,8 @@ esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
             continue;
         }
         if (frame.codec() != camera_hub::VideoCodec::Jpeg) continue;
+        if (api.cameraStream_.usbStreaming() && lastHttpTimestampUs != 0 &&
+            frame.timestampUs() - lastHttpTimestampUs < 100000) continue;
 
         std::array<char, 112> partHeader{};
         const int headerSize = std::snprintf(partHeader.data(), partHeader.size(),
@@ -526,6 +532,7 @@ esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
             result = httpd_resp_send_chunk(request, reinterpret_cast<const char*>(frame.data()), frame.size());
         if (result == ESP_OK) result = httpd_resp_send_chunk(request, "\r\n", 2);
         if (result != ESP_OK) break;
+        lastHttpTimestampUs = frame.timestampUs();
     }
 
     api.cameraStream_.unsubscribeHttp();

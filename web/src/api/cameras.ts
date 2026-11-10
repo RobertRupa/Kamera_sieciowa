@@ -28,6 +28,7 @@ export const cameraSettingsSchema = z.object({
 export const cameraSettingsUpdateSchema = cameraSettingsSchema.omit({ preview_fps: true })
 export const cameraConfigurationSchema = z.object({ data: z.object({
   persistent: z.boolean(),
+  usb_streaming: z.boolean().default(false),
   hardware_codecs: z.array(z.enum(['jpeg', 'h264'])).max(2).default(['jpeg']),
   state: z.enum(['idle', 'queued', 'applying', 'applied', 'failed']),
   settings: cameraSettingsSchema,
@@ -72,7 +73,8 @@ async function request(base: string, path: string, method = 'GET', body?: unknow
       ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
-  if (!response.ok) throw new Error(response.status === 401 ? 'unauthorized' : 'camera_configuration_failed')
+  if (!response.ok) throw new Error(response.status === 401 ? 'unauthorized' :
+    response.status === 409 ? 'camera_busy' : 'camera_configuration_failed')
   return response.status === 204 ? null : response.json()
 }
 

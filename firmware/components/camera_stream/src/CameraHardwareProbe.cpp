@@ -864,8 +864,9 @@ void CameraHardwareProbe::unsubscribeHttp() noexcept {
 }
 
 camera_hub::FrameLease CameraHardwareProbe::tryTakeHttpFrame() noexcept {
+    // Keep the browser on the newest image, even when its network socket is slow.
     return state_ == nullptr || state_->broker == nullptr
-        ? camera_hub::FrameLease{} : state_->broker->tryTake(camera_hub::Output::Http);
+        ? camera_hub::FrameLease{} : state_->broker->tryTakeLatest(camera_hub::Output::Http);
 }
 
 void CameraHardwareProbe::setNetworkEnabled(bool enabled) noexcept {

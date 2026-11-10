@@ -245,6 +245,7 @@ esp_err_t CameraApi::configuration(httpd_req_t* request) {
     cJSON* modes = cJSON_AddArrayToObject(data, "modes");
     bool valid = root != nullptr && data != nullptr && settings != nullptr && modes != nullptr &&
         cJSON_AddBoolToObject(data, "persistent", false) != nullptr &&
+        cJSON_AddBoolToObject(data, "usb_streaming", camera_.usbStreaming()) != nullptr &&
         cJSON_AddStringToObject(data, "state", configurationState(configuration.state)) != nullptr &&
         cJSON_AddNumberToObject(settings, "mode_id", configuration.settings.modeId) != nullptr &&
         cJSON_AddNumberToObject(settings, "preview_fps", configuration.settings.previewFps) != nullptr &&
