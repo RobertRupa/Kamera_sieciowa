@@ -1,0 +1,8 @@
+# H.264 is used directly by CameraHardwareProbe.cpp. Keep it in this
+# component's manifest instead of relying on esp_video's conditional Kconfig
+# dependency, which may be pruned during a fresh ESP-IDF 6.1 configure.
+dependencies:
+  espressif/esp_h264:
+    version: "1.4.*"
+    rules:
+      - if: "target in [esp32p4]"

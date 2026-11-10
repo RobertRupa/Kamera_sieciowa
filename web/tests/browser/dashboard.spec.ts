@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test('camera configuration uses driver modes, authenticated writes and stream links', async ({ page }, info) => {
   const token = 'a'.repeat(64)
-  let settings = { mode_id: 0, preview_fps: 20, jpeg_quality: 80, codec: 'jpeg', h264_bitrate: 2000000 }
+  let settings = { mode_id: 0, preview_fps: 50, jpeg_quality: 80, codec: 'jpeg', h264_bitrate: 2000000 }
   let enabled = false
   let port = 5004
   let activeUdpReads = 0
@@ -36,7 +36,9 @@ test('camera configuration uses driver modes, authenticated writes and stream li
     if (request.method() === 'PATCH') {
       const next = request.postDataJSON()
       if (next.codec !== settings.codec) enabled = false
-      settings = next
+      expect(next).not.toHaveProperty('preview_fps')
+      const modeFps = ({ 0: 50, 1: 50, 2: 50, 3: 30, 4: 45 } as Record<number, number>)[next.mode_id]
+      settings = { ...settings, ...next, preview_fps: modeFps }
     }
     return route.fulfill({ status: request.method() === 'PATCH' ? 202 : 200, json: { data: {
       persistent: false, hardware_codecs: ['jpeg', 'h264'], state: request.method() === 'PATCH' ? 'queued' : 'applied', settings,
@@ -66,11 +68,11 @@ test('camera configuration uses driver modes, authenticated writes and stream li
   }
   await expect(page.getByRole('option', { name: '1920 × 1920 · 30 FPS', exact: true })).toBeDisabled()
   await page.keyboard.press('Escape')
-  await controls.getByLabel('Preview FPS', { exact: true }).fill('10')
+  await expect(controls.getByLabel('Preview FPS', { exact: true })).toHaveCount(0)
   await controls.getByLabel('JPEG quality', { exact: true }).fill('70')
   await controls.getByRole('button', { name: 'Apply camera settings' }).click()
   await expect(controls.getByText('Camera configuration applied', { exact: true })).toBeVisible()
-  expect(settings).toEqual({ mode_id: 0, preview_fps: 10, jpeg_quality: 70, codec: 'jpeg', h264_bitrate: 2000000 })
+  expect(settings).toEqual({ mode_id: 0, preview_fps: 50, jpeg_quality: 70, codec: 'jpeg', h264_bitrate: 2000000 })
   await controls.getByRole('switch', { name: 'RTP / UDP', exact: true }).check()
   await controls.getByRole('button', { name: 'Apply UDP settings' }).click()
   await expect(controls.getByRole('link', { name: 'SDP', exact: true })).toBeVisible()

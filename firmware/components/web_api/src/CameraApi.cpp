@@ -207,19 +207,24 @@ esp_err_t CameraApi::configuration(httpd_req_t* request) {
     if (request->method == HTTP_PATCH) {
         cJSON* root = readJson(request);
         cJSON* mode = cJSON_GetObjectItemCaseSensitive(root, "mode_id");
-        cJSON* fps = cJSON_GetObjectItemCaseSensitive(root, "preview_fps");
         cJSON* quality = cJSON_GetObjectItemCaseSensitive(root, "jpeg_quality");
         cJSON* codec = cJSON_GetObjectItemCaseSensitive(root, "codec");
         cJSON* bitrate = cJSON_GetObjectItemCaseSensitive(root, "h264_bitrate");
         const bool validCodec = codec == nullptr || (cJSON_IsString(codec) &&
             (std::strcmp(codec->valuestring, "jpeg") == 0 || std::strcmp(codec->valuestring, "h264") == 0));
-        const bool valid = root != nullptr && cJSON_GetArraySize(root) == 3 + (codec != nullptr) + (bitrate != nullptr) &&
-            integer(mode, 0, 31) && integer(fps, 1, 20) && integer(quality, 1, 100) && validCodec &&
+        const bool valid = root != nullptr && cJSON_GetArraySize(root) == 2 + (codec != nullptr) + (bitrate != nullptr) &&
+            integer(mode, 0, 31) && integer(quality, 1, 100) && validCodec &&
             (bitrate == nullptr || integer(bitrate, 64000, 10000000));
         auto settings = camera_.configuration().settings;
         if (valid) {
             settings.modeId = static_cast<std::uint32_t>(mode->valuedouble);
-            settings.previewFps = static_cast<std::uint8_t>(fps->valuedouble);
+            // Target FPS follows selected driver mode, not a user-supplied FPS.
+            const auto config = camera_.configuration();
+            for (std::size_t i = 0; i < config.modeCount; ++i) {
+                if (config.modes[i].id == settings.modeId &&
+                    config.modes[i].sensorFps <= UINT8_MAX)
+                    settings.previewFps = static_cast<std::uint8_t>(config.modes[i].sensorFps);
+            }
             settings.jpegQuality = static_cast<std::uint8_t>(quality->valuedouble);
             if (codec != nullptr) settings.codec = std::strcmp(codec->valuestring, "h264") == 0
                 ? camera_hub::VideoCodec::H264 : camera_hub::VideoCodec::Jpeg;
@@ -240,6 +245,7 @@ esp_err_t CameraApi::configuration(httpd_req_t* request) {
     cJSON* modes = cJSON_AddArrayToObject(data, "modes");
     bool valid = root != nullptr && data != nullptr && settings != nullptr && modes != nullptr &&
         cJSON_AddBoolToObject(data, "persistent", false) != nullptr &&
+        cJSON_AddBoolToObject(data, "usb_streaming", camera_.usbStreaming()) != nullptr &&
         cJSON_AddStringToObject(data, "state", configurationState(configuration.state)) != nullptr &&
         cJSON_AddNumberToObject(settings, "mode_id", configuration.settings.modeId) != nullptr &&
         cJSON_AddNumberToObject(settings, "preview_fps", configuration.settings.previewFps) != nullptr &&

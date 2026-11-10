@@ -1,32 +1,249 @@
 # VS Code, incremental build and fast firmware flashing
 
-## Official toolchain
-Use Visual Studio Code with the **Espressif IDF extension** (`espressif.esp-idf-extension`) and official installed ESP-IDF. Prefer maintained stable ESP-IDF 6.1 when target/BSP supports it; select compatible branch explicitly. Configure local Python/toolchain through extension/Espressif Installation Manager, not arbitrary system libraries. Use CMake + Ninja and IDF Component Manager; keep frontend build separate.
+## Root ESP-IDF project (ESP32-P4)
+
+The only ESP-IDF project root is now **the repository root**,
+`Kamera_sieciowa/`. This is where `CMakeLists.txt`,
+`CMakePresets.json`, `sdkconfig.defaults`, `dependencies.lock` and
+`.vscode/` reside. Source components remain under `firmware/main`
+and `firmware/components`, registered using `EXTRA_COMPONENT_DIRS`.
+The partition CSV stays at `firmware/partitions.csv`; its SDKCONFIG
+path is relative to the new root.
+
+Open `Kamera_sieciowa/` directly in VS Code or open
+`Kamera_sieciowa.code-workspace`. Do **not** open `firmware/` as
+the ESP-IDF project. The firmware subdirectory no longer contains an
+ESP-IDF root CMake project.
+
+ESP-IDF 6.1 and the Espressif extension use `default` automatically
+(or select it explicitly under **ESP-IDF: Select Project Configuration**).
+The preset already sets `IDF_TARGET=esp32p4`; **do not execute
+Set Target repeatedly**, as that invokes a destructive `fullclean` of
+the selected build directory before attempting configure.
+
+From the repository root:
+
+```bash
+python3 scripts/prepare_web_assets.py
+source "$HOME/.espressif/v6.1/esp-idf/export.sh"
+idf.py --preset default build
+# After selecting the correct programming USB-UART interface:
+idf.py --preset default -p /dev/ttyACM0 flash monitor
+```
+
+The `production` preset uses `build/production` with a separate
+`sdkconfig`; `default` uses `build/default`. Both use
+`sdkconfig.defaults` at the repository root. The WebGUI build hook
+runs `python scripts/prepare_web_assets.py` with the repository as cwd.
+Do not move `firmware/main` or `firmware/components` individually.
+
+## mDNS: camera_hub.local and the WebGUI
+
+The primary mDNS responder name is now **`camera_hub.local`** (exactly,
+with an underscore). The URL for the WebGUI and JSON API on the STA
+network is `http://camera_hub.local/`. The firmware also publishes
+`camera-hub.local` as a standards-compliant compatibility alias.
+The mDNS service registers `_http._tcp` on port **80**.
+
+**Naming note:** underscores are outside the conventional LDH hostname
+syntax, so some DNS/NSS resolvers and browsers may reject
+`camera_hub.local` even if the ESP mDNS responder accepts and
+advertises the label. Use `http://camera-hub.local/` if that happens.
+Alternatively use the actual station IPv4 address. An ordinary DNS
+record or DHCP hostname is not configured by this change.
+
+mDNS is initialized only when the ESP32-P4 has an active Wi-Fi AP or
+station IPv4 address (via the existing ESP32-C6/ESP-Hosted SDIO link).
+The firmware retries transient initialization failure and updates the
+legacy alias when station connectivity replaces provisioning AP.
+It does not modify SDIO GPIO assignments or C6 firmware.
+
+The API's strict HTTP `Origin` check now accepts **only**:
+`http://camera_hub.local`, `http://camera-hub.local` and the exact
+local IPv4 HTTP origin. It still verifies the request's destination IP
+matches the device's current AP or STA IP. It does **not** introduce
+wildcard CORS or authorize foreign origins.
+
+To verify on **Ubuntu connected to the same Wi-Fi network**:
+
+```bash
+sudo apt-get install -y avahi-utils libnss-mdns
+avahi-resolve-host-name camera_hub.local
+avahi-resolve-host-name camera-hub.local
+avahi-browse -rt _http._tcp
+getent ahostsv4 camera_hub.local
+curl --noproxy '*' -i http://camera_hub.local/api/v1/device/status
+```
+
+Some Linux resolver stacks may not resolve underscored hostnames
+through `getent`, even if `avahi-resolve-host-name` sees the mDNS
+response. If the compatible alias works but the canonical name does
+not, that is a client resolver compatibility issue, not necessarily
+an ESP-Hosted transport failure. Ensure that Wi-Fi access-point
+isolation and multicast filtering do not block UDP 5353 to
+224.0.0.251. mDNS is link-local and does not automatically cross
+VLANs/subnets.
+
+On the P4 serial monitor look for:
+
+```text
+mdns_service: mDNS responder initialized as camera_hub.local, HTTP _http._tcp port 80
+mdns_service: mDNS compatibility alias camera-hub.local updated
+```
+
+The log confirms initialization only; check the Ubuntu commands to
+verify real network resolution.
+
+### USB webcam versus WebGUI configuration
+
+If the USB camera enumerates but the browser shows an old mode, the WebGUI
+must poll the camera configuration API. The current frontend refreshes live
+USB ownership, sensor mode and nominal FPS. On UVC host disconnect the P4
+releases the USB lock and restores the pre-USB mode; no P4 reset is required.
+Browser HTTP MJPEG is capped at 20 FPS by default while USB is active to give USB
+priority. This cap does **not** affect the USB sensor/transfer target.
+
+If WebGUI settings remain disabled after unplugging the host, check whether
+the development login flag was enabled in the **active** generated config:
+
+```bash
+grep -E 'APP_DEV_DEFAULT_CREDENTIALS|APP_DEV_MODE' build/default/sdkconfig
+idf.py --preset default menuconfig   # Camera Hub -> insecure development defaults
+```
+
+The `default` profile enables lab-only admin/admin login for camera controls
+through `sdkconfig.dev.defaults`; it is intentionally excluded from
+`production`. Never expose the open AP or known password to an untrusted
+network. Note that editing the camera and restoring USB state do not change
+the ESP32-C6 ESP-Hosted/SDIO link.
+
+### Board profile: ESP32-P4 + ESP32-C6 over SDIO
+
+`default` is the main profile for **Waveshare ESP32-P4-Module-DEV-KIT
+(SKU 30560)**, incorporating ESP32-P4 and its onboard ESP32-C6 radio
+coprocessor. ESP-IDF compiles **ESP32-P4** firmware (`IDF_TARGET=esp32p4`).
+There is no Espressif IDF compilation target called `esp32p4+c6`.
+The ESP32-C6 retains its existing ESP-Hosted 3.1.0 firmware and P4-to-C6
+four-bit SDIO wiring; these USB flash actions do not flash the C6.
+
+Both board Type-C programming interfaces support an ESP-IDF/esptool serial
+flash transport (the corresponding OS port can be `/dev/ttyACM*` or
+`/dev/ttyUSB*` based on the interface). **Neither is the HS USB-A UVC
+data port.** In VS Code, run one of:
+
+- **ESP32-P4+C6: Flash + Monitor via USB Serial/JTAG**
+- **ESP32-P4+C6: Flash + Monitor via UART bridge**
+
+Each task prompts for an actual port so no per-computer serial path is
+committed. Identify ports with `ls -l /dev/serial/by-id/` or
+`python -m serial.tools.list_ports -v`.
+
+From a terminal in the repository root, choose the port explicitly:
+
+```bash
+idf.py --preset default build
+idf.py --preset default -p /dev/ttyACM0 flash monitor  # example native USB
+# or
+idf.py --preset default -p /dev/ttyUSB0 flash monitor  # example bridge UART
+```
+
+The P4 ROM may require BOOT+RESET to enter download mode if automatic
+reset is not available on the selected programming port. The flash
+method is serial in both cases; changing to the HS UVC connector is not
+a supported alternative for `idf.py flash`.
+
+### Repair an incomplete root CMake build
+
+If Set Target prints
+`Directory '.../Kamera_sieciowa/build/default' doesn't seem to be
+a CMake build directory` or
+`There is no CMakeCache.txt`, a previous CMake configure failed
+and left `build/default` in an incomplete state. From the **root**:
+
+```bash
+python3 scripts/repair_incomplete_idf_build.py --preset default
+idf.py --preset default build
+```
+
+The repair command **renames**, not deletes, an incomplete
+`build/default` to `build/default.incomplete-...`, preserving
+configuration files and logs. It leaves complete build directories
+(with `CMakeCache.txt`) untouched. VS Code also provides the
+**ESP32-P4: Repair incomplete CMake build (default)** task.
+
+An old `firmware/build/` from previous versions is no longer used.
+It remains ignored by Git and need not be deleted to build from the
+root. Do not use `set-target` as a remedy for a failed CMake configure;
+fix the first actual configure/compiler error.
+
+### Missing H.264 component
+
+`camera_stream` uses `esp_h264_enc_single_hw.h`. The
+`firmware/components/camera_stream/idf_component.yml` declares
+`espressif/esp_h264` explicitly; CMake requires the managed component
+`espressif__esp_h264`. The Component Manager now resolves dependencies
+from the **root** `dependencies.lock` and stores downloads in the
+root `managed_components/`; do not copy libraries manually.
+
+## Camera_sieciowa: build and flash from the sidebar
+
+1. In VS Code select **File → Open Workspace from File** and open
+   `Kamera_sieciowa.code-workspace` at the repository root.
+2. Install the recommended `espressif.esp-idf-extension` and configure
+   **ESP-IDF 6.1** (extension Setup / Espressif Installation Manager).
+3. In the left Activity Bar select **Espressif / ESP-IDF**. If prompted,
+   choose **Kamera_sieciowa (ESP32-P4)** as the project folder.
+   Select the **default** preset (target **esp32p4**) and the *programming/debug* serial
+   interface (Windows e.g. COM8; Linux e.g. /dev/ttyACM0).
+4. Use **Build Your Project**, **Flash Your Project**, **Monitor Device**
+   or **Build, Flash and Start a Monitor** in the Espressif sidebar.
+   Flash method is configured as **UART**; the USB HS OTG **UVC port**
+   is a different peripheral and is not a firmware flashing port.
+5. VS Code also exposes named **ESP32-P4:** tasks under
+   **Terminal → Run Task** (`.vscode/tasks.json`). They require
+   an ESP-IDF-initialized terminal environment. The official Espressif
+   sidebar is the preferred path because it configures the toolchain.
+
+The local-only ESP-IDF pre-build hook runs
+`python scripts/prepare_web_assets.py` from the repository root:
+it checks `web/src`, `web/public` and package metadata, runs `npm ci`
+only when dependencies are absent, and performs `npm run build`
+only when assets are missing or stale. **Node.js/npm is required**
+because `web_api` embeds generated assets. No implicit eFuse write,
+backup, erase, or full clean is performed. Project/serial paths are
+relative or auto-detected; pick your own serial port on each machine.
+
+### USB role caution
+
+Before connecting the computer to the dedicated USB OTG port, check
+the board's physical role selector, schematic and VBUS routing. Use
+USB **device** role for UVC. Never connect two USB hosts with a
+standard A-to-A cable. The existing USB-UART console/flash port
+remains separate.
 
 ## One-time device setup
 ```bash
-# Inside exported ESP-IDF environment
+# From the repository root in an exported ESP-IDF environment
 idf.py --version
-idf.py set-target esp32s3      # choose EXACT actual MCU, once per target/profile
-idf.py build
+idf.py --preset default build  # default preset sets IDF_TARGET=esp32p4
 ```
 `set-target` can regenerate project configuration and build state, so **never run it before each flash**. Commit appropriate `sdkconfig.defaults` and project `dependencies.lock`. Do not put personal port paths, Wi-Fi passwords or credentials in Git.
 
 ## Fast upload
 ```bash
 # Linux (choose actual port):
-idf.py -p /dev/ttyUSB0 flash
-idf.py -p /dev/ttyUSB0 monitor
+idf.py --preset default -p /dev/ttyUSB0 flash
+idf.py --preset default -p /dev/ttyUSB0 monitor
 # Build-if-needed, flash and monitor:
-idf.py -p /dev/ttyUSB0 flash monitor
+idf.py --preset default -p /dev/ttyUSB0 flash monitor
 # Windows PowerShell in active IDF environment:
-idf.py -p COM5 flash monitor
+idf.py --preset default -p COM5 flash monitor
 ```
 `idf.py flash` invokes required incremental build stages; `idf.py build` is optional as a separate test step. Avoid automatic pre-flash backup, manual SHA/MD5 readback comparison, `fullclean`, partition erase or `erase-flash` as everyday actions. **Do not disable normal ESP-IDF/esptool firmware header/checksum/integrity validation**.
 
 Separate explicit operations: chip erase, new partition schema, NVS reset, key or eFuse provisioning, flash encryption/secure boot and recovery. These can be destructive/irreversible; require explicit authorization. For slow upload diagnose cable, baud, boot-mode GPIO, USB-serial driver, permissions and target before disabling guards.
 
-Copy [fast-flash script](../templates/esp-idf/scripts/quick-flash.sh) to firmware's `scripts/`. CI should build/verify but never auto-flash unknown USB devices.
+See [fast-flash script template](../templates/esp-idf/scripts/quick-flash.sh) for other projects. CI should build/verify but never auto-flash unknown USB devices.
 
 ## VS Code checklist
 - Install Espressif IDF extension and one C++ IntelliSense provider (clangd or MS C/C++) with generated compilation database.

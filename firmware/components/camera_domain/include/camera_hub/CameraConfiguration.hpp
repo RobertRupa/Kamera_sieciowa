@@ -19,7 +19,7 @@ struct SensorMode {
 
 struct CameraSettings {
     std::uint32_t modeId{0};
-    std::uint8_t previewFps{20};
+    std::uint8_t previewFps{50};
     std::uint8_t jpegQuality{80};
     VideoCodec codec{VideoCodec::Jpeg};
     std::uint32_t h264Bitrate{2000000};
@@ -47,7 +47,7 @@ constexpr bool hardwareH264ModeFits(const SensorMode& mode) noexcept {
 
 inline bool validCameraSettings(const CameraConfiguration& configuration,
                                 const CameraSettings& settings) noexcept {
-    if (settings.previewFps == 0 || settings.previewFps > 20 ||
+    if (settings.previewFps == 0 ||
         settings.jpegQuality == 0 || settings.jpegQuality > 100 ||
         configuration.modeCount > configuration.modes.size()) return false;
     if ((settings.codec != VideoCodec::Jpeg && settings.codec != VideoCodec::H264) ||
@@ -55,7 +55,7 @@ inline bool validCameraSettings(const CameraConfiguration& configuration,
     for (std::size_t index = 0; index < configuration.modeCount; ++index) {
         const auto& mode = configuration.modes[index];
         if (mode.id == settings.modeId)
-                return captureModeFits(mode) && settings.previewFps <= mode.sensorFps &&
+                return captureModeFits(mode) && settings.previewFps == mode.sensorFps &&
                    (settings.codec != VideoCodec::H264 || hardwareH264ModeFits(mode));
     }
     return false;

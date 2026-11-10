@@ -6,7 +6,6 @@
   "camera_configuration_applied": "Camera configuration applied",
   "camera_input": "Camera input",
   "sensor_mode": "Sensor mode",
-  "preview_fps": "Preview FPS",
   "jpeg_quality": "JPEG quality",
   "hardware_codec": "Hardware codec",
   "hardware_jpeg": "JPEG (hardware)",
@@ -115,5 +114,9 @@
   "credential_storage": "Credential storage (plaintext NVS)",
   "wifi_plaintext_warning": "Wi-Fi passwords are stored unencrypted and can be recovered from a Flash dump.",
   "capability": "Capability",
-  "state": "State"
+  "state": "State",
+  "camera_usb_locked": "USB UVC currently controls the sensor. When streaming ends, the previous settings will be restored and editing will be available again.",
+  "camera_login_disabled": "Settings editing is locked: development login is disabled in the firmware.",
+  "camera_busy": "Camera is busy with USB UVC or a mode change. Try again when streaming stops.",
+  "nominal": "nominal"
 }

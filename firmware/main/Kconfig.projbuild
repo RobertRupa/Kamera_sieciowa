@@ -1,5 +1,16 @@
 menu "Camera Hub"
 
+config APP_BOARD_WAVESHARE_P4_C6_SDIO
+    bool "Waveshare ESP32-P4 + ESP32-C6 (SDIO coprocessor)"
+    depends on IDF_TARGET_ESP32P4
+    default y
+    help
+        ESP32-P4 is the only application build/flash target. ESP32-C6 is an
+        onboard Wi-Fi/BLE coprocessor running independently, connected by
+        the existing 4-bit SDIO and ESP-Hosted configuration. This board
+        identity does not flash or reconfigure the C6.
+
+
 config APP_DEV_MODE
     bool "Development diagnostic firmware"
     default y
@@ -15,6 +26,24 @@ config APP_CAMERA_OV5647_DRIVER
     help
         Build Espressif's OV5647 driver. Sensor detection and the one-frame
         development probe are controlled separately by APP_CAMERA_PROBE_ON_BOOT.
+
+config APP_USB_UVC_ENABLE
+    bool "Enable ESP32-P4 USB 2.0 HS MJPEG webcam (UVC device)"
+    depends on APP_CAMERA_OV5647_DRIVER && IDF_TARGET_ESP32P4
+    default y
+    help
+        Requires verified OTG device jumper and connector VBUS routing.
+        USB webcam enumeration is independent of Wi-Fi or the setup AP.
+
+config APP_HTTP_MJPEG_FPS_WHILE_UVC
+    int "Maximum HTTP MJPEG preview FPS while USB UVC is active"
+    depends on APP_USB_UVC_ENABLE
+    range 1 50
+    default 20
+    help
+        Throttle only HTTP browser preview delivery while USB owns the
+        sensor to reduce P4/C6 SDIO and PSRAM contention. Does not limit
+        USB camera frames. USB and HTTP share a single hardware encoder.
 
 config APP_CAMERA_PROBE_ON_BOOT
     bool "Run a one-frame MIPI-CSI hardware probe at boot"

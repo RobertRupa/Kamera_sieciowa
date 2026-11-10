@@ -65,9 +65,10 @@ the board's CSI wiring has been validated.
 
 The verified OV5647 preview flow is `esp_video MIPI-CSI/ISP capture (RGB565) ->
 P4 hardware JPEG encoder -> FrameBroker -> HTTP multipart MJPEG`. The development
-boot probe captures one frame and deinitializes; after the setup AP is ready, the
-application starts a persistent 800x800 capture. Encoding/publication runs only
-while an HTTP or network subscriber is connected and is capped at 20 FPS. The stream is on
+boot probe captures one frame and deinitializes; before starting the setup AP,
+the application starts a persistent 800x800 capture. Encoding/publication runs
+while an HTTP, network, or USB UVC subscriber is connected and targets the
+enumerated sensor mode FPS instead of the former 20 FPS cap. The stream is on
 port 81 at `/stream.mjpg`; the status API and embedded WebGUI remain on port 80.
 The HTTP consumer holds a `FrameLease` until all response chunks for that JPEG
 have been sent. No sink may open the camera independently.
@@ -75,10 +76,15 @@ have been sent. No sink may open the camera independently.
 HTTP MJPEG is reported Ready only when persistent capture and the stream server
 are active and a capture frame has arrived. `camera` capability remains
 Unverified until board-level camera wiring and sustained-operation criteria are
-verified. USB UVC remains unimplemented; do not report it Ready or add stub adapters.
+verified. The new UVC device adapter uses `Output::Usb` and is not yet
+hardware-verified; device enumeration/throughput must not be reported as tested.
 
-Reuse the official esp_video UVC and simple_video_server examples for verified
-APIs, not their unrelated board pin maps or plaintext credential examples.
+USB device implementation uses the Espressif `usb_device_uvc` component, not
+the unrelated USB *host* UVC driver. It negotiates the advertised MJPEG profile,
+requests an asynchronous mode switch from the existing CSI owner, takes the most
+recent lease and releases the lease once the UVC component copies that frame
+into its own transfer buffer. It does not open CSI, start a second encoder or
+claim a hardware-verified USB link.
 `CameraNetworkStream` consumes the broker's independently bounded `Rtsp` queue
 for RTSP-negotiated RTP/UDP and direct RTP/SDP. Managed `espp/rtsp` 1.4.2 supplies
 the RTSP engine, JPEG parser and RTP serializer. The integration removes optional

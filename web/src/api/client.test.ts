@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { capabilitiesSchema, normalizeDeviceUrl, statusSchema } from './client'
-import { cameraInventorySchema, cameraSettingsSchema, cameraStreamLink } from './cameras'
+import { cameraInventorySchema, cameraSettingsSchema, cameraSettingsUpdateSchema, cameraStreamLink } from './cameras'
 import en from '../locales/en.json'
 import pl from '../locales/pl.json'
 
 describe('device boundary', () => {
   it('accepts an HTTP(S) origin', () => {
+    expect(normalizeDeviceUrl('http://camera_hub.local/')).toBe('http://camera_hub.local')
     expect(normalizeDeviceUrl('http://camera-hub.local/')).toBe('http://camera-hub.local')
     expect(normalizeDeviceUrl('https://192.168.1.2:443')).toBe('https://192.168.1.2')
   })
@@ -24,9 +25,18 @@ describe('device boundary', () => {
     expect(cameraSettingsSchema.parse({ mode_id: 0, preview_fps: 20, jpeg_quality: 80 })).toEqual({ mode_id: 0, preview_fps: 20, jpeg_quality: 80, codec: 'jpeg', h264_bitrate: 2000000 })
     for (const settings of [
       { mode_id: -1, preview_fps: 20, jpeg_quality: 80 },
-      { mode_id: 0, preview_fps: 21, jpeg_quality: 80 },
+      { mode_id: 0, preview_fps: 0, jpeg_quality: 80 },
       { mode_id: 0, preview_fps: 10, jpeg_quality: 101 },
     ]) expect(() => cameraSettingsSchema.parse(settings)).toThrow()
+  })
+  it('binds FPS to sensor mode and rejects an independent FPS in PATCH', () => {
+    expect(cameraSettingsSchema.parse({ mode_id: 0, preview_fps: 50, jpeg_quality: 80 }).preview_fps).toBe(50)
+    expect(cameraSettingsSchema.parse({ mode_id: 0, preview_fps: 90, jpeg_quality: 80 }).preview_fps).toBe(90)
+    expect(cameraSettingsUpdateSchema.parse({ mode_id: 0, jpeg_quality: 80 })).toEqual({
+      mode_id: 0, jpeg_quality: 80, codec: 'jpeg', h264_bitrate: 2000000,
+    })
+    expect(cameraSettingsUpdateSchema.parse({ mode_id: 0, preview_fps: 1, jpeg_quality: 80 }))
+      .not.toHaveProperty('preview_fps')
   })
   it('builds camera stream links only for active advertised streams', () => {
     const camera = { id: 'csi-0', sensor: 'OV5647', interface: 'MIPI-CSI', capturing: true,

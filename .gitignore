@@ -1,17 +1,85 @@
-/build/
-/firmware/build/
-/firmware/sdkconfig
-/firmware/sdkconfig.old
-/firmware/managed_components/
-/migration/**/managed_components/
-/migration/**/sdkconfig
-/migration/**/sdkconfig.old
+# ESP-IDF / Component Manager (all firmware projects and CMake presets)
+**/build/
+**/build-*/
+**/build.invalid-*/
+**/cmake-build-*/
+**/CMakeUserPresets.json
+**/managed_components/
+**/sdkconfig
+**/sdkconfig.old
+**/sdkconfig.old.*
+
+# Out-of-tree CMake / Ninja / compiler products
+**/CMakeCache.txt
+**/CMakeFiles/
+**/cmake_install.cmake
+**/compile_commands.json
+**/build.ninja
+**/.ninja_deps
+**/.ninja_log
+**/Testing/Temporary/
+*.elf
+*.map
+
+# Keep sdkconfig.defaults, idf_component.yml and dependencies.lock tracked.
+# Do not blanket-ignore *.bin: vendor/radio firmware may be a source asset.
 /migration/host_legacy/main/c6_image.bin
-/web/node_modules/
-/web/dist/
-/web/test-results/
-/web/playwright-report/
+
+# WebGUI / Node.js / Vite / Vue / TypeScript / Vitest / Playwright
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/coverage/
+**/test-results/
+**/playwright-report/
+**/.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Python tooling / tests
+**/__pycache__/
+*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.venv/
+**/venv/
+**/.tox/
+**/.cache/
+
+# Editor-machine state; shared VS Code tasks/settings/extensions are versioned
+**/.vscode/*.local.json
+**/.vscode/ipch/
+**/.vscode/.browse.VC.db*
+**/.idea/
+*.iml
+
+# OS / debugging / local temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+*.rej
+*.log
+
+# Local credentials, signing keys and provisioning data
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.sample
+!**/.env.template
+**/secrets/
+**/credentials.json
+**/credentials.*.json
+**/nvs_keys/
+**/nvs_keys*.bin
 *.pem
 *.key
-.env
-.env.local
+*.p12
+*.pfx

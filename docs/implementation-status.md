@@ -1,3 +1,21 @@
+# Experimental USB UVC branch status (2026-11-09)
+
+Branch `feature/esp32p4-usb-uvc-sensor-fps` introduces an Espressif USB HS
+UVC/MJPEG gadget backed by the existing OV5647 JPEG FrameBroker; it starts before
+Wi-Fi provisioning and remains alive when network startup fails. Capture FPS now
+follows the enumerated mode. WebGUI no longer offers a separate FPS input.
+VS Code multi-root workspace, Espressif sidebar Build/Flash tasks, incremental
+WebGUI pre-build, and CI frontend-asset preparation were added.
+
+**Verification:** Source committed, not yet compiled or physically flashed with
+the new UVC dependency. USB enumeration, USB endpoint throughput, actual frame
+rate, and connector device-role/VBUS wiring require real board tests. The
+historical 20-FPS hardware results below refer to prior firmware only.
+A fresh `firmware/dependencies.lock` must be generated and reviewed with
+ESP-IDF 6.1 Component Manager on a build-capable host.
+
+---
+
 # Implementation Status
 
 Current C6 result: P4-hosted SDIO OTA to3.1.0 completed and runtime activation

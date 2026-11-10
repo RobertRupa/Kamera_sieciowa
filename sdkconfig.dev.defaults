@@ -1,0 +1,12 @@
+# Additional defaults for the "default" ESP32-P4 development preset.
+# Verified in previous device logs: Waveshare SKU 30560 SDIO wiring to ESP32-C6
+# and successful ESP-Hosted RPC V2 handshake with C6 firmware 3.1.0.
+# IMPORTANT: SETUP AP IS OPEN / UNAUTHENTICATED; isolated lab use only.
+# This file is intentionally excluded from the "production" CMake preset.
+CONFIG_APP_DEV_MODE=y
+CONFIG_APP_WIFI_WIRING_VERIFIED=y
+CONFIG_APP_DEV_OPEN_SETUP_AP=y
+
+# Local-lab WebGUI camera login. This enables known admin/admin credentials
+# together with an OPEN setup AP. Never use on an untrusted network.
+CONFIG_APP_DEV_DEFAULT_CREDENTIALS=y

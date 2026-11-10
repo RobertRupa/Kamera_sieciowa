@@ -1,0 +1,18 @@
+{
+  "folders": [
+    {
+      "name": "Kamera_sieciowa (ESP32-P4)",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "idf.flashType": "UART",
+    "idf.saveBeforeBuild": true,
+    "idf.extensionActivationMode": "always"
+  },
+  "extensions": {
+    "recommendations": [
+      "espressif.esp-idf-extension"
+    ]
+  }
+}

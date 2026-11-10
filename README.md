@@ -11,15 +11,17 @@ below describe preceding stages, not the current device state.
 
 Latest camera hardware result: the ESP-IDF 6.1 firmware was incrementally
 flashed to `/dev/ttyACM0`. The device detected OV5647, received an 800x800 CSI
-frame, and served a persistent 800x800 MJPEG preview capped at 20 FPS. The
+frame, and served a persistent 800x800 MJPEG preview capped at 20 FPS (earlier tested baseline).
+The experimental USB UVC branch now targets the sensor's enumerated FPS instead;
+new USB and higher-FPS operation have not yet been tested on the device. The
 embedded WebGUI decoded a live frame. `http_mjpeg=ready`; the board-level
 `camera` capability remains `unverified` pending PCB revision and sustained
 operation checks. See [latest verification](docs/verification.md).
 
-Development firmware for one MIPI-CSI camera on a Waveshare ESP32-P4-Module-DEV-KIT.
+Development firmware for one MIPI-CSI camera on a Waveshare ESP32-P4-Module-DEV-KIT with an ESP32-C6 Wi-Fi/BLE coprocessor connected by the existing SDIO bus.
 The current unit has a verified OV5647 preview over HTTP MJPEG and a packaged
 device-side WebGUI, driver-derived runtime configuration, and RTP/UDP streams.
-USB UVC, simultaneous second-camera capture, IMX219 support, production authentication,
+USB UVC hardware validation, simultaneous second-camera capture, IMX219 support, production authentication,
 long-duration camera endurance and full release onboarding are not implemented
 or verified. The board's static camera capability remains `unverified`.
 The limited provisioning API and conditional AP/STA/mDNS startup are implemented.
@@ -38,7 +40,7 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
 
 ## Implemented
 
-- Native ESP-IDF 6.1/P4 diagnostic project in [firmware](firmware/).
+- Native ESP-IDF 6.1/ESP32-P4 project rooted in this repository; component sources remain in [firmware](firmware/).
 - Shared immutable JPEG frame leases, bounded external storage and independent
 	two-frame queues for USB, HTTP and RTSP.
 - Shared-profile validation and rejection of profile changes during active USB.
@@ -50,7 +52,8 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
 	offered only for compatible native capture dimensions.
 - All five upstream OV5647 modes selectable, from 800x640 through 1920x1080,
   including 800x1280 portrait and 1280x960 binning; default remains 800x800.
-  Sensor FPS is distinct from the 20 FPS preview cap.
+  Target capture FPS now follows each selected sensor mode (no separate UI FPS
+  control); throughput can be lower due to hardware JPEG and USB/HTTP/RTP load.
 - RTSP-negotiated RTP/JPEG UDP and direct UDP with an SDP download. See the
 	[camera API](docs/camera-api.md) for ports, authentication and resource limits.
 - Latest-frame RTP delivery and bounded direct-UDP burst pacing reduce avoidable
@@ -66,15 +69,82 @@ plaintext P4 NVS record. The HMAC_UP eFuse is present but unused by this firmwar
 	frame are observed, while PCB revision, module revision and sustained camera
 	readiness remain explicitly unverified.
 
+The main `default` board profile is **Waveshare ESP32-P4 + ESP32-C6
+(SDIO)**. Firmware builds and flashes to ESP32-P4, while the ESP32-C6
+remains an onboard ESP-Hosted coprocessor with unchanged SDIO wiring.
+VS Code has P4 flash/monitor tasks for native USB Serial/JTAG and USB-UART
+bridge; both ask for the connected serial port.
+
+## USB UVC Webcam (experimental branch)
+
+- ESP32-P4 USB 2.0 **High-Speed OTG device** class, using Espressif
+  `usb_device_uvc ~1.3.1` with MJPEG/Bulk and existing FrameBroker JPEG frames.
+- Four advertised USB profiles: **800×800/50**, **800×640/50**,
+  **1280×960/45**, **1920×1080/30** FPS (nominal sensor mode rates).
+  The fifth sensor mode, 800×1280/50, remains selectable in WebGUI.
+- Windows Camera/OBS and Linux V4L2 can use the native webcam interface without
+  virtual camera software. The USB sink does not require Wi-Fi to start.
+- **Hardware warning:** Waveshare SKU 30560's two USB-C connectors are
+  programming/serial links, not the P4 HS UVC peripheral. The manufacturer
+  routes direct HS OTG to USB-A socket **1** (jumper **HOST**); jumper
+  **DEVICE** selects the CH334 hub sockets **2–4**. A PC cannot safely be
+  connected by an arbitrary male-A/male-A cable; verify the board-side
+  VBUS switch and use a proper device-mode adapter/breakout first.
+- ESP-IDF 6.1 build, USB 2.0 High-Speed enumeration (`303a:8000`) and
+  Linux `uvcvideo` binding are now observed. **Actual UVC FPS remains
+  unmeasured**. The second capture-loop FPS gate is removed and the new
+  5-second CSI/JPEG/USB feeder counters aid performance diagnosis.
+- USB host disconnect now releases the UVC camera reservation and restores
+  the previous sensor mode. WebGUI polls live USB ownership, supports
+  lab-only camera settings login (admin/admin in the `default` development
+  preset), and explicitly labels nominal FPS. While USB UVC is active,
+  browser MJPEG is limited to 20 FPS by default to prioritize the USB webcam.
+- Development Wi-Fi setup requires the P4/C6 transport-wiring and open-AP
+  gates. `sdkconfig.dev.defaults` enables them for the previously tested SDIO
+  wiring, but any existing generated `build/default/sdkconfig` may retain
+  older disabled values. The setup AP is **open and unauthenticated**; never
+  use that development profile on an untrusted network.
+  See [USB webcam bring-up](docs/usb-uvc.md) and
+  [VS Code build/flash](docs/build-flash-vscode.md).
+
+## Local WebGUI address
+
+With the ESP32-P4 + ESP32-C6 Wi-Fi/SDIO link online and a valid AP/STA IP,
+open [http://camera_hub.local/](http://camera_hub.local/) on the local
+network. The firmware also advertises the conventional alias
+[http://camera-hub.local/](http://camera-hub.local/) for clients that
+do not support underscores in hostnames. The `_http._tcp` service
+is advertised on port 80. The ESP32-P4 logs mDNS startup and retries
+transient initialization failures; clients must still support mDNS
+(multicast UDP 5353) on the same link. See
+[validation commands](docs/build-flash-vscode.md#mdns-camera_hublocal-and-the-webgui).
+
 ## Build and Test
 
-From an ESP-IDF 6.1 terminal:
+From an ESP-IDF 6.1 terminal, prepare the embedded WebGUI once/when changed:
 
-```powershell
-Set-Location firmware
-idf.py set-target esp32p4
-idf.py build
+```bash
+python scripts/prepare_web_assets.py
 ```
+
+Open the **repository root** (`Kamera_sieciowa/`) directly in VS Code
+or use [`Kamera_sieciowa.code-workspace`](Kamera_sieciowa.code-workspace).
+The Espressif sidebar builds the **root** ESP-IDF project; component sources
+remain in `firmware/`. The extension pre-build hook prepares WebGUI assets.
+
+Then run from the repository root in an ESP-IDF 6.1 terminal:
+
+```bash
+idf.py --preset default build
+# Optional: flash through the board's programming USB-UART interface
+idf.py --preset default -p /dev/ttyACM0 flash monitor
+```
+
+The `default` CMake preset already fixes `IDF_TARGET=esp32p4`. Do not run
+`idf.py set-target` on every build. A stale pre-migration
+`firmware/build/` is not used. If root `build/default` is incomplete,
+run `python3 scripts/repair_incomplete_idf_build.py --preset default`
+once before building. See [VS Code instructions](docs/build-flash-vscode.md).
 
 The unchanged partition table contains an ordinary `app_config` NVS partition at
 0xE10000/24 KiB. It is not encrypted; Flash readers can recover saved Wi-Fi

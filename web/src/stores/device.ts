@@ -10,7 +10,7 @@ export const useDeviceStore = defineStore('device', () => {
     revision: hardwareManifest.camera.module_revision,
     sensors: Object.freeze([...hardwareManifest.camera.reported_sensors]),
   })
-  const address = ref(import.meta.env.DEV ? 'http://camera-hub.local' : window.location.origin)
+  const address = ref(import.meta.env.DEV ? 'http://camera_hub.local' : window.location.origin)
   const base = ref('')
   const status = ref<DeviceStatus | null>(null)
   const capabilities = ref<Capabilities | null>(null)
@@ -26,14 +26,14 @@ export const useDeviceStore = defineStore('device', () => {
     return url.toString()
   })
   function state(feature: string) { return capabilities.value?.capabilities[feature] ?? 'unknown' }
-  async function refreshStatus() {
+  async function refreshStatus(resetStreamError = true) {
     const [deviceStatus, deviceCapabilities] = await Promise.all([
       getDeviceResource(base.value, '/api/v1/device/status', statusSchema),
       getDeviceResource(base.value, '/api/v1/device/capabilities', capabilitiesSchema),
     ])
     status.value = deviceStatus.data
     capabilities.value = deviceCapabilities.data
-    streamError.value = false
+    if (resetStreamError) streamError.value = false
   }
   async function connect() {
     if (pending.value) return

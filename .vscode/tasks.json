@@ -1,0 +1,170 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ESP32-P4: Repair incomplete CMake build (default)",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "scripts/repair_incomplete_idf_build.py",
+        "--preset",
+        "default"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "detail": "Quarantine only an incomplete build/default directory (no CMakeCache.txt); preserves logs and sdkconfig"
+    },
+    {
+      "label": "ESP32-P4: Prepare WebGUI",
+      "type": "shell",
+      "command": "python",
+      "args": [
+        "scripts/prepare_web_assets.py"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "detail": "Install frontend dependencies if missing; rebuild only when source assets change"
+    },
+    {
+      "label": "ESP32-P4: Build firmware",
+      "type": "shell",
+      "command": "idf.py",
+      "args": [
+        "--preset",
+        "default",
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": [],
+      "detail": "ESP-IDF 6.1 / ESP32-P4 incremental build; requires an exported ESP-IDF environment",
+      "dependsOn": "ESP32-P4: Prepare WebGUI"
+    },
+    {
+      "label": "ESP32-P4: Flash firmware",
+      "type": "shell",
+      "command": "idf.py",
+      "args": [
+        "--preset",
+        "default",
+        "flash"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "detail": "Build if needed, auto-detect connected ESP32-P4 serial port; requires IDF environment",
+      "dependsOn": "ESP32-P4: Prepare WebGUI"
+    },
+    {
+      "label": "ESP32-P4: Build + Flash + Monitor",
+      "type": "shell",
+      "command": "idf.py",
+      "args": [
+        "--preset",
+        "default",
+        "build",
+        "flash",
+        "monitor"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "detail": "USB-UART programming/debug serial port (not USB OTG UVC port)",
+      "dependsOn": "ESP32-P4: Prepare WebGUI"
+    },
+    {
+      "label": "ESP32-P4: Monitor",
+      "type": "shell",
+      "command": "idf.py",
+      "args": [
+        "--preset",
+        "default",
+        "monitor"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "detail": "Read logs from connected programming USB-UART port"
+    },
+    {
+      "label": "ESP32-P4+C6: Flash + Monitor via USB Serial/JTAG",
+      "type": "shell",
+      "command": "idf.py",
+      "args": [
+        "--preset",
+        "default",
+        "-p",
+        "${input:p4UsbDevicePort}",
+        "flash",
+        "monitor"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "detail": "Flash the P4 over native USB Serial/JTAG; C6 stays managed by ESP-Hosted/SDIO",
+      "dependsOn": "ESP32-P4: Prepare WebGUI"
+    },
+    {
+      "label": "ESP32-P4+C6: Flash + Monitor via UART bridge",
+      "type": "shell",
+      "command": "idf.py",
+      "args": [
+        "--preset",
+        "default",
+        "-p",
+        "${input:p4UartBridgePort}",
+        "flash",
+        "monitor"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "detail": "Flash the P4 via a USB-to-UART bridge and BOOT/download mode when required",
+      "dependsOn": "ESP32-P4: Prepare WebGUI"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "p4UsbDevicePort",
+      "type": "promptString",
+      "description": "ESP32-P4 native USB Serial/JTAG device port (not UVC port)",
+      "default": "/dev/ttyACM0"
+    },
+    {
+      "id": "p4UartBridgePort",
+      "type": "promptString",
+      "description": "ESP32-P4 external USB-UART bridge device port",
+      "default": "/dev/ttyUSB0"
+    }
+  ]
+}

@@ -7,6 +7,7 @@
 
 #include "cJSON.h"
 #include "wifi_web_assets.hpp"
+#include "camera_hub/DiscoveryNames.hpp"
 #include "esp_app_desc.h"
 #include "esp_heap_caps.h"
 #include "esp_random.h"
@@ -316,13 +317,12 @@ bool ProvisioningApi::eligible(httpd_req_t* request, std::uint32_t& peer, bool a
     }
     peer = remoteIp.s_addr;
     if (httpd_req_get_hdr_value_len(request, "Origin") != 0) {
-        std::array<char, 80> origin{}, expected{};
-        std::array<char, 16> address{};
-        inet_ntop(AF_INET, &localIp, address.data(), address.size());
-        std::snprintf(expected.data(), expected.size(), "http://%s", address.data());
+        std::array<char, 80> origin{};
+        std::array<char, 16> localAddress{};
+        inet_ntop(AF_INET, &localIp, localAddress.data(), localAddress.size());
         if (httpd_req_get_hdr_value_str(request, "Origin", origin.data(), origin.size()) != ESP_OK ||
-            std::strcmp(origin.data(), expected.data()) != 0) {
-            ESP_LOGW(kTag, "request rejected: origin=%s expected=%s", origin.data(), expected.data());
+            !camera_hub::allowedDeviceHttpOrigin(origin.data(), localAddress.data())) {
+            ESP_LOGW(kTag, "request rejected: untrusted origin=%s", origin.data());
             return false;
         }
     }
@@ -503,6 +503,10 @@ esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
     httpd_resp_set_hdr(request, "Cache-Control", "no-store");
     api.cameraStream_.subscribeHttp();
 
+    // Throttle only browser MJPEG while USB is active. This avoids excessive
+    // Wi-Fi/SDIO writes while the USB host receives the full sensor stream.
+    // The default is 20 fps (Kconfig); unrelated HTTP-only preview is uncapped.
+    std::uint64_t lastHttpTimestampUs = 0;
     esp_err_t result = ESP_OK;
         while (api.cameraStream_.captureStatus().running &&
             api.cameraStream_.captureStatus().codec == camera_hub::VideoCodec::Jpeg) {
@@ -512,6 +516,11 @@ esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
             continue;
         }
         if (frame.codec() != camera_hub::VideoCodec::Jpeg) continue;
+#if CONFIG_APP_USB_UVC_ENABLE
+        if (api.cameraStream_.usbStreaming() && lastHttpTimestampUs != 0 &&
+            frame.timestampUs() - lastHttpTimestampUs <
+                1000000ULL / CONFIG_APP_HTTP_MJPEG_FPS_WHILE_UVC) continue;
+#endif
 
         std::array<char, 112> partHeader{};
         const int headerSize = std::snprintf(partHeader.data(), partHeader.size(),
@@ -526,6 +535,7 @@ esp_err_t ProvisioningApi::videoStream(httpd_req_t* request) {
             result = httpd_resp_send_chunk(request, reinterpret_cast<const char*>(frame.data()), frame.size());
         if (result == ESP_OK) result = httpd_resp_send_chunk(request, "\r\n", 2);
         if (result != ESP_OK) break;
+        lastHttpTimestampUs = frame.timestampUs();
     }
 
     api.cameraStream_.unsubscribeHttp();
