@@ -6,6 +6,7 @@
 #include "connectivity/WifiService.hpp"
 #include "connectivity/HostedProbe.hpp"
 #include "discovery/MdnsService.hpp"
+#include "camera_hub/DiscoveryNames.hpp"
 #include "app_services/NetworkProvisioner.hpp"
 #include "web_api/ProvisioningApi.hpp"
 #include "esp_timer.h"
@@ -162,10 +163,28 @@ extern "C" void app_main() {
     } else {
         ESP_LOGW("camera_hub", "STA restore disabled until companion credential storage is audited");
     }
-    const auto discoveryResult = mdns.start("camera-hub", wifi.apAddress() != 0, 80);
-    if (discoveryResult != ESP_OK) ESP_LOGW("camera_hub", "mDNS start failed: %s", esp_err_to_name(discoveryResult));
+    // mDNS runs on the ESP32-P4 TCP/IP stack over the existing C6 SDIO
+    // transport. The mDNS component listens to esp-netif IP up/down events.
+    // Retry a failed initialization and update the legacy alias on AP->STA.
+    std::int64_t nextMdnsRetryUs = 0;
     for (;;) {
         usbUvc.pollConnection();
+        const auto mdnsAddress = provisioner.stationAddress() != 0
+            ? provisioner.stationAddress() : wifi.apAddress();
+        if (mdnsAddress == 0) {
+            mdns.stop();
+        } else if (!mdns.running() && esp_timer_get_time() >= nextMdnsRetryUs) {
+            const auto result = mdns.start(camera_hub::kCameraMdnsHostname, true, 80);
+            if (result != ESP_OK) {
+                ESP_LOGW("camera_hub", "mDNS camera_hub.local start failed: %s",
+                         esp_err_to_name(result));
+                nextMdnsRetryUs = esp_timer_get_time() + 5000000;
+            }
+        }
+        if (mdns.running()) {
+            // No network reinitialization or changes to the working C6 SDIO path.
+            static_cast<void>(mdns.updateFallbackAddress(mdnsAddress));
+        }
         if (scanService.isScanning() && scanService.operationId() != scanOperationId) {
             scanOperationId = scanService.operationId();
             scanDeadline = esp_timer_get_time() + 20000000;

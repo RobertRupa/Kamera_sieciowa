@@ -7,6 +7,7 @@
 
 #include "cJSON.h"
 #include "wifi_web_assets.hpp"
+#include "camera_hub/DiscoveryNames.hpp"
 #include "esp_app_desc.h"
 #include "esp_heap_caps.h"
 #include "esp_random.h"
@@ -316,13 +317,12 @@ bool ProvisioningApi::eligible(httpd_req_t* request, std::uint32_t& peer, bool a
     }
     peer = remoteIp.s_addr;
     if (httpd_req_get_hdr_value_len(request, "Origin") != 0) {
-        std::array<char, 80> origin{}, expected{};
-        std::array<char, 16> address{};
-        inet_ntop(AF_INET, &localIp, address.data(), address.size());
-        std::snprintf(expected.data(), expected.size(), "http://%s", address.data());
+        std::array<char, 80> origin{};
+        std::array<char, 16> localAddress{};
+        inet_ntop(AF_INET, &localIp, localAddress.data(), localAddress.size());
         if (httpd_req_get_hdr_value_str(request, "Origin", origin.data(), origin.size()) != ESP_OK ||
-            std::strcmp(origin.data(), expected.data()) != 0) {
-            ESP_LOGW(kTag, "request rejected: origin=%s expected=%s", origin.data(), expected.data());
+            !camera_hub::allowedDeviceHttpOrigin(origin.data(), localAddress.data())) {
+            ESP_LOGW(kTag, "request rejected: untrusted origin=%s", origin.data());
             return false;
         }
     }
